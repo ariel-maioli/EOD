@@ -466,7 +466,7 @@
       showNotice("Solo el administrador puede exportar datos.", true);
       return;
     }
-    const headings = ["Predio", "Fecha", "Nombre de contacto", "Celular", "Notas", "Estado", "Creado por", "Creado", "Última edición por", "Última edición"];
+    const headings = ["Predio", "Fecha", "Nombre", "Celular", "Notas", "Estado", "Creado por", "Creado", "Última edición por", "Última edición"];
     const rows = visits.map((visit) => {
       const archived = Boolean(visit.archived_at || propertyFor(visit.property_number)?.archived_at);
       return [
@@ -482,7 +482,7 @@
         formatDateTime(visit.updated_at)
       ];
     });
-    const csv = "\uFEFF" + [headings, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
+    const csv = "\uFEFF" + [headings, ...rows].map((row) => row.map(csvEscape).join(";")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
