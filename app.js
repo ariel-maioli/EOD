@@ -242,7 +242,8 @@
       const propertyButton = canArchiveProperty
         ? `<button class="button button-small button-secondary" type="button" data-action="toggle-property" data-number="${escapeHtml(visit.property_number)}" data-archived="${parentArchived}">${parentArchived ? "Restaurar predio" : "Archivar predio"}</button>`
         : "";
-      const editButton = !archived
+      const canEdit = !archived && (isAdmin() || visit.created_by === state.user?.id);
+      const editButton = canEdit
         ? `<button class="button button-small button-quiet" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}">Editar</button>`
         : "";
 
@@ -339,6 +340,10 @@
     const visit = state.visits.find((item) => item.id === id);
     if (!visit || visit.archived_at || propertyFor(visit.property_number)?.archived_at) {
       showNotice("La visita no está activa y no se puede editar.", true);
+      return;
+    }
+    if (!isAdmin() && visit.created_by !== state.user?.id) {
+      showNotice("Solo podés editar las visitas que registraste.", true);
       return;
     }
     state.editingId = id;

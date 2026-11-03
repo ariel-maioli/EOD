@@ -33,6 +33,10 @@ Aplicación web sencilla para registrar visitas de mantenimiento a predios. La i
 
 Para un proyecto que ya ejecutó el esquema inicial, ejecutá [`profile_display_name.sql`](./profile_display_name.sql) en **SQL Editor**. Luego, en **Table Editor → profiles**, completá `display_name` para cada usuario. El nombre se muestra en la aplicación, la actividad y las exportaciones; el correo sigue siendo el identificador de inicio de sesión y se muestra como alternativa si el nombre está vacío.
 
+## Permisos de edición de visitas
+
+Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_edit_permissions.sql`](./visit_edit_permissions.sql) en **SQL Editor**. Desde entonces, cada técnico puede editar solo sus visitas activas; el administrador conserva permiso para editar cualquier visita. La regla se valida tanto en la interfaz como en las políticas de la base de datos.
+
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí `main` y la carpeta `/ (root)`, y guardá. La URL pública servirá los archivos de este repositorio; para usar los datos se requiere iniciar sesión.

@@ -326,6 +326,8 @@ on public.visits for update to authenticated
 using (
     public.is_admin()
     or (
+        created_by = auth.uid()
+        and
         archived_at is null
         and exists (
             select 1
@@ -338,6 +340,8 @@ using (
 with check (
     public.is_admin()
     or (
+        created_by = auth.uid()
+        and
         archived_at is null
         and exists (
             select 1
