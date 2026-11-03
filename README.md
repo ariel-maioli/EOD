@@ -29,6 +29,10 @@ Aplicación web sencilla para registrar visitas de mantenimiento a predios. La i
 6. En **Authentication → URL Configuration**, configurá **Site URL** como la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`, y agregá esa misma dirección a **Redirect URLs**. Los enlaces de recuperación deben volver a la aplicación publicada, no a `localhost`.
 7. El usuario puede elegir **Olvidé mi contraseña** en el inicio de sesión. El administrador también puede enviar un enlace de recuperación desde **Authentication → Users**. El enlace abre el formulario de cambio de contraseña en EOD.
 
+## Nombres visibles de usuarios
+
+Para un proyecto que ya ejecutó el esquema inicial, ejecutá [`profile_display_name.sql`](./profile_display_name.sql) en **SQL Editor**. Luego, en **Table Editor → profiles**, completá `display_name` para cada usuario. El nombre se muestra en la aplicación, la actividad y las exportaciones; el correo sigue siendo el identificador de inicio de sesión y se muestra como alternativa si el nombre está vacío.
+
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí `main` y la carpeta `/ (root)`, y guardá. La URL pública servirá los archivos de este repositorio; para usar los datos se requiere iniciar sesión.

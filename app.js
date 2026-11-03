@@ -72,8 +72,9 @@
   }
 
   function profileName(id) {
-    const found = state.profiles.find((profile) => profile.id === id);
-    return found?.email || "Usuario";
+    const found = state.profiles.find((profile) => profile.id === id)
+      || (state.profile?.id === id ? state.profile : null);
+    return found?.display_name?.trim() || found?.email || "Usuario";
   }
 
   function propertyFor(number) {
@@ -141,7 +142,7 @@
     const [visitsResult, propertiesResult, profilesResult] = await Promise.all([
       state.client.from("visits").select("*").order("visit_date", { ascending: false }),
       state.client.from("properties").select("*"),
-      state.client.from("profiles").select("id,email,role")
+      state.client.from("profiles").select("id,email,display_name,role")
     ]);
 
     const failure = [visitsResult, propertiesResult, profilesResult].find((result) => result.error);
@@ -177,9 +178,9 @@
     const options = ['<option value="">Todos</option>'];
     state.profiles
       .slice()
-      .sort((a, b) => a.email.localeCompare(b.email, "es"))
+      .sort((a, b) => profileName(a.id).localeCompare(profileName(b.id), "es"))
       .forEach((profile) => {
-        options.push(`<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.email)}</option>`);
+        options.push(`<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}</option>`);
       });
     select.innerHTML = options.join("");
     if (state.profiles.some((profile) => profile.id === selected)) select.value = selected;
@@ -303,7 +304,7 @@
     state.user = user;
     const { data, error } = await state.client
       .from("profiles")
-      .select("id,email,role")
+      .select("id,email,display_name,role")
       .eq("id", user.id)
       .single();
     if (error) throw error;
@@ -311,8 +312,8 @@
     byId("login-panel").hidden = true;
     byId("application").hidden = false;
     byId("session-area").hidden = false;
-    byId("session-email").textContent = data.email;
-    byId("welcome-title").textContent = `Hola, ${data.email}`;
+    byId("session-email").textContent = profileName(data.id);
+    byId("welcome-title").textContent = `Hola, ${profileName(data.id)}`;
     byId("role-badge").textContent = data.role === "admin" ? "Administrador" : "Técnico";
     byId("activity-tab").hidden = !isAdmin();
     byId("export-actions").hidden = !isAdmin();

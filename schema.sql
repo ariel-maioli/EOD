@@ -6,10 +6,14 @@
 create table if not exists public.profiles (
     id uuid primary key references auth.users (id) on delete cascade,
     email text not null,
+    display_name text,
     role text not null default 'technician'
         check (role in ('admin', 'technician')),
     created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+    add column if not exists display_name text;
 
 create or replace function public.sync_auth_profile()
 returns trigger
