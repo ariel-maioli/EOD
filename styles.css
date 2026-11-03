@@ -71,6 +71,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .view-panel > .card { margin-bottom: 18px; }
 
 .stack { display: grid; gap: 11px; }
+.auth-link { margin-top: 12px; padding-left: 0; }
 .form-grid, .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
 .filters { grid-template-columns: 2fr repeat(2, 1fr); align-items: end; }
 .field { display: grid; align-content: start; gap: 7px; min-width: 0; font-size: .92rem; font-weight: 650; }

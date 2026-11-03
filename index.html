@@ -38,6 +38,27 @@
         <input id="login-password" name="password" type="password" autocomplete="current-password" required>
         <button class="button button-primary" type="submit">Ingresar</button>
       </form>
+      <button id="show-forgot-password" class="button button-quiet auth-link" type="button">Olvidé mi contraseña</button>
+      <form id="forgot-password-form" class="stack" hidden>
+        <p class="muted">Te enviaremos un enlace para elegir una contraseña nueva.</p>
+        <label for="recovery-email">Correo electrónico</label>
+        <input id="recovery-email" name="email" type="email" autocomplete="email" required>
+        <button class="button button-primary" type="submit">Enviar enlace de recuperación</button>
+        <button id="cancel-forgot-password" class="button button-quiet" type="button">Volver a ingresar</button>
+      </form>
+    </section>
+
+    <section id="recovery-panel" class="card auth-card" hidden>
+      <div class="eyebrow">Seguridad de la cuenta</div>
+      <h1>Elegir contraseña nueva</h1>
+      <p class="muted">Ingresá y confirmá tu nueva contraseña.</p>
+      <form id="recovery-form" class="stack">
+        <label for="new-password">Nueva contraseña</label>
+        <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="confirm-password">Confirmar contraseña</label>
+        <input id="confirm-password" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" required>
+        <button class="button button-primary" type="submit">Actualizar contraseña</button>
+      </form>
     </section>
 
     <section id="application" hidden>

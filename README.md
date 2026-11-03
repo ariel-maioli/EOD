@@ -26,6 +26,9 @@ Aplicación web sencilla para registrar visitas de mantenimiento a predios. La i
 
    La clave pública está pensada para estar disponible en el navegador; el acceso a los datos lo limitan las políticas RLS definidas por el esquema. **Nunca uses ni publiques la clave `service_role` o una clave secreta.**
 
+6. En **Authentication → URL Configuration**, configurá **Site URL** como la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`, y agregá esa misma dirección a **Redirect URLs**. Los enlaces de recuperación deben volver a la aplicación publicada, no a `localhost`.
+7. El usuario puede elegir **Olvidé mi contraseña** en el inicio de sesión. El administrador también puede enviar un enlace de recuperación desde **Authentication → Users**. El enlace abre el formulario de cambio de contraseña en EOD.
+
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí `main` y la carpeta `/ (root)`, y guardá. La URL pública servirá los archivos de este repositorio; para usar los datos se requiere iniciar sesión.

@@ -12,6 +12,7 @@
     profiles: [],
     audit: [],
     editingId: null,
+    recoveryMode: false,
     busy: false
   };
 
@@ -100,7 +101,12 @@
     byId("application").hidden = true;
     byId("session-area").hidden = true;
     byId("login-panel").hidden = false;
+    byId("recovery-panel").hidden = true;
+    byId("login-form").hidden = false;
+    byId("forgot-password-form").hidden = true;
+    byId("show-forgot-password").hidden = false;
     byId("login-password").value = "";
+    state.recoveryMode = false;
     state.user = null;
     state.profile = null;
     state.visits = [];
@@ -108,6 +114,27 @@
     state.profiles = [];
     state.audit = [];
     state.editingId = null;
+  }
+
+  function showRecoveryPanel() {
+    state.recoveryMode = true;
+    byId("application").hidden = true;
+    byId("login-panel").hidden = true;
+    byId("recovery-panel").hidden = false;
+    byId("session-area").hidden = true;
+  }
+
+  function showForgotPasswordForm() {
+    clearNotice();
+    byId("login-form").hidden = true;
+    byId("show-forgot-password").hidden = true;
+    byId("forgot-password-form").hidden = false;
+    byId("recovery-email").value = byId("login-email").value.trim();
+    byId("recovery-email").focus();
+  }
+
+  function recoveryRedirectUrl() {
+    return `${window.location.origin}${window.location.pathname}`;
   }
 
   async function loadData() {
@@ -488,6 +515,62 @@
       }
     });
 
+    byId("show-forgot-password").addEventListener("click", showForgotPasswordForm);
+    byId("cancel-forgot-password").addEventListener("click", () => {
+      byId("forgot-password-form").hidden = true;
+      byId("login-form").hidden = false;
+      byId("show-forgot-password").hidden = false;
+      clearNotice();
+    });
+
+    byId("forgot-password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (state.busy) return;
+      setBusy(true);
+      clearNotice();
+      try {
+        const { error } = await state.client.auth.resetPasswordForEmail(
+          byId("recovery-email").value.trim(),
+          { redirectTo: recoveryRedirectUrl() }
+        );
+        if (error) throw error;
+        showNotice("Si el correo corresponde a una cuenta, recibirás un enlace para cambiar la contraseña. Revisá también el correo no deseado.");
+      } catch (error) {
+        showNotice(humanError(error), true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    byId("recovery-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (state.busy) return;
+      clearNotice();
+      if (!event.currentTarget.reportValidity()) return;
+      const password = byId("new-password").value;
+      if (password !== byId("confirm-password").value) {
+        showNotice("Las contraseñas no coinciden.", true);
+        byId("confirm-password").focus();
+        return;
+      }
+
+      setBusy(true);
+      try {
+        const { error } = await state.client.auth.updateUser({ password });
+        if (error) throw error;
+        const { error: signOutError } = await state.client.auth.signOut();
+        if (signOutError) throw signOutError;
+        showLoggedOut();
+        byId("login-email").value = byId("recovery-email").value.trim();
+        history.replaceState(null, document.title, recoveryRedirectUrl());
+        showNotice("Contraseña actualizada. Ya podés ingresar con tu nueva contraseña.");
+      } catch (error) {
+        showNotice(humanError(error), true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
     byId("visit-form").addEventListener("submit", saveVisit);
     byId("sign-out").addEventListener("click", async () => {
       setBusy(true);
@@ -539,10 +622,26 @@
     }
 
     state.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-    byId("login-panel").hidden = false;
+    const recoveryLink = new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery";
+    if (recoveryLink) showRecoveryPanel();
+    else byId("login-panel").hidden = false;
+
+    state.client.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") showRecoveryPanel();
+      if (event === "SIGNED_OUT") showLoggedOut();
+    });
+
     const { data, error } = await state.client.auth.getSession();
     if (error) {
       showNotice(humanError(error), true);
+      return;
+    }
+    if (recoveryLink) {
+      if (!data.session) {
+        showNotice("El enlace de recuperación venció o ya fue utilizado. Solicitá uno nuevo e intentá nuevamente.", true);
+        byId("recovery-panel").hidden = true;
+        byId("login-panel").hidden = false;
+      }
       return;
     }
     if (data.session?.user) {
@@ -555,9 +654,6 @@
         showNotice(humanError(loadError), true);
       }
     }
-    state.client.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) showLoggedOut();
-    });
   }
 
   start().catch((error) => {
