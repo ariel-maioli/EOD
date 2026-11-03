@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#164e63">
+  <title>EOD | Registro de visitas</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="EOD, inicio">EOD<span> · Fin de jornada</span></a>
+    <div id="session-area" class="session-area" hidden>
+      <span id="session-email" class="session-email"></span>
+      <button id="sign-out" class="button button-quiet" type="button">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section id="setup-panel" class="card message-card" hidden>
+      <h1>Falta conectar Supabase</h1>
+      <p>Completá la URL del proyecto y la clave pública en <code>config.js</code>. Encontrás los pasos en el README del proyecto.</p>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+    <section id="login-panel" class="card auth-card" hidden>
+      <div class="eyebrow">Mantenimiento de predios</div>
+      <h1>Ingresar a EOD</h1>
+      <p class="muted">Usá la cuenta que te asignó el administrador.</p>
+      <form id="login-form" class="stack">
+        <label for="login-email">Correo electrónico</label>
+        <input id="login-email" name="email" type="email" autocomplete="username" required>
+        <label for="login-password">Contraseña</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <button class="button button-primary" type="submit">Ingresar</button>
+      </form>
+    </section>
+
+    <section id="application" hidden>
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">Registro de mantenimiento</div>
+          <h1 id="welcome-title">Hola</h1>
+        </div>
+        <span id="role-badge" class="badge"></span>
+      </div>
+
+      <nav class="tabs" aria-label="Secciones">
+        <button class="tab-button" type="button" data-view="form-view">Nueva visita</button>
+        <button class="tab-button" type="button" data-view="search-view">Buscar visitas</button>
+        <button id="activity-tab" class="tab-button" type="button" data-view="activity-view" hidden>Actividad reciente</button>
+      </nav>
+
+      <section id="form-view" class="view-panel">
+        <div class="card">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">Carga rápida</div>
+              <h2 id="visit-form-title">Registrar una visita</h2>
+            </div>
+          </div>
+          <p id="edit-hint" class="muted" hidden>El número de predio no se puede cambiar al editar una visita.</p>
+          <form id="visit-form" class="form-grid">
+            <label class="field" for="property-number">
+              <span>Número de predio <span class="required">*</span></span>
+              <input id="property-number" name="property_number" type="text" inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6" placeholder="Ej.: 123456" required>
+              <small>6 dígitos, sin cero inicial.</small>
+            </label>
+            <label class="field" for="visit-date">
+              <span>Fecha de visita <span class="required">*</span></span>
+              <input id="visit-date" name="visit_date" type="date" required>
+            </label>
+            <label class="field" for="contact-name">
+              <span>Nombre de contacto <span class="required">*</span></span>
+              <input id="contact-name" name="contact_name" type="text" maxlength="50" autocomplete="name" required>
+              <small>Hasta 50 caracteres.</small>
+            </label>
+            <label class="field" for="cellphone">
+              <span>Celular <span class="required">*</span></span>
+              <input id="cellphone" name="cellphone" type="tel" inputmode="numeric" pattern="[1-9][0-9]{9}" maxlength="10" placeholder="3413166322" required>
+              <small>10 dígitos con código de área, sin 0 ni 15.</small>
+            </label>
+            <label class="field field-full" for="notes">
+              <span>Notas</span>
+              <textarea id="notes" name="notes" rows="4" maxlength="250" placeholder="Información útil para futuras visitas (opcional)"></textarea>
+              <small><span id="notes-count">0</span>/250 caracteres.</small>
+            </label>
+            <div class="form-actions field-full">
+              <button id="save-visit" class="button button-primary" type="submit">Guardar visita</button>
+              <button id="cancel-edit" class="button button-secondary" type="button" hidden>Cancelar edición</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="search-view" class="view-panel" hidden>
+        <div class="card">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">Consulta</div>
+              <h2>Buscar visitas</h2>
+            </div>
+            <span id="result-count" class="muted"></span>
+          </div>
+          <div class="filters">
+            <label class="field field-search" for="search-query">
+              <span>Predio, nombre o celular</span>
+              <input id="search-query" type="search" placeholder="Escribí para buscar">
+            </label>
+            <label class="field" for="filter-from">
+              <span>Desde</span>
+              <input id="filter-from" type="date">
+            </label>
+            <label class="field" for="filter-to">
+              <span>Hasta</span>
+              <input id="filter-to" type="date">
+            </label>
+            <label class="field" for="filter-user">
+              <span>Técnico</span>
+              <select id="filter-user"><option value="">Todos</option></select>
+            </label>
+            <label class="field" for="filter-status">
+              <span>Estado</span>
+              <select id="filter-status">
+                <option value="active">Activos</option>
+                <option value="archived">Archivados</option>
+                <option value="all">Todos</option>
+              </select>
+            </label>
+          </div>
+          <div id="export-actions" class="export-actions" hidden>
+            <button id="export-filtered" class="button button-secondary" type="button">Exportar resultados a CSV</button>
+            <button id="export-all" class="button button-quiet" type="button">Exportar todos los activos</button>
+          </div>
+        </div>
+        <div id="visit-results" class="results-list" aria-live="polite"></div>
+      </section>
+
+      <section id="activity-view" class="view-panel" hidden>
+        <div class="card">
+          <div class="eyebrow">Administración</div>
+          <h2>Actividad reciente</h2>
+          <p class="muted">Cambios realizados durante los últimos 30 días. El historial completo se conserva en la base de datos.</p>
+          <div id="activity-list" class="activity-list"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <footer class="footer">EOD · Registro interno de mantenimiento</footer>
+</body>
+</html>
