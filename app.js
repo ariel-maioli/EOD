@@ -130,6 +130,17 @@
     return found?.display_name?.trim() || found?.email || "Usuario";
   }
 
+  function greetingForCurrentTime() {
+    const hour = Number(new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: "America/Argentina/Buenos_Aires"
+    }).formatToParts(new Date()).find((part) => part.type === "hour")?.value);
+    if (hour >= 5 && hour < 12) return "Buenos días";
+    if (hour >= 12 && hour < 20) return "Buenas tardes";
+    return "Buenas noches";
+  }
+
   function propertyFor(number) {
     return state.properties.find((property) => property.property_number === number);
   }
@@ -467,7 +478,7 @@
     byId("application").hidden = false;
     byId("session-area").hidden = false;
     byId("session-email").textContent = profileName(data.id);
-    byId("welcome-title").textContent = `Hola, ${profileName(data.id)}`;
+    byId("welcome-title").textContent = `${greetingForCurrentTime()}, ${profileName(data.id)}`;
     byId("role-badge").textContent = data.role === "admin" ? "Administrador" : "Técnico";
     byId("activity-tab").hidden = !isAdmin();
     byId("export-actions").hidden = !isAdmin();
