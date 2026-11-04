@@ -41,6 +41,10 @@ Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_edit_perm
 
 Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_payments.sql`](./visit_payments.sql) en **SQL Editor**. Solo el administrador puede procesar listas de predios separados por coma; se marca la visita activa más reciente y se registra la fecha y quién realizó el proceso. Todos los usuarios autenticados pueden consultar el estado y la fecha de pago. Si un predio no existe, está archivado, no tiene visitas activas o la visita ya está abonada, la app informa el motivo y pregunta si continúa con los siguientes números. Las correcciones del pago están disponibles únicamente para el admin y quedan auditadas.
 
+## Preparar producción para el inicio
+
+Cuando estés listo para eliminar las visitas cargadas hasta el momento, revisá [`clear_production_visits.sql`](./clear_production_visits.sql) y ejecutalo manualmente en **Supabase → SQL Editor**. Es una operación destructiva: borra todas las filas de `visits` y sus eventos de auditoría; conserva predios, perfiles/usuarios y eventos de auditoría de predios. La transacción bloquea temporalmente la tabla y revierte todo si ocurre un error. No lo ejecutes en un proyecto de pruebas que quieras conservar.
+
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí `main` y la carpeta `/ (root)`, y guardá. La URL pública servirá los archivos de este repositorio; para usar los datos se requiere iniciar sesión.
