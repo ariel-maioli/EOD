@@ -127,6 +127,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 
 .notice { margin: 0 0 18px; padding: 12px 15px; border: 1px solid #b8d9d4; border-radius: 10px; background: #eaf7f4; color: #15574f; line-height: 1.45; }
 .notice.error { border-color: #e7caca; background: #fff1f0; color: #852e2e; }
+.notice.success-notice { position: fixed; z-index: 20; right: 16px; bottom: 16px; width: min(520px, calc(100% - 32px)); margin: 0; box-shadow: 0 8px 26px rgb(23 43 58 / 14%); }
 .results-list, .activity-list { display: grid; gap: 12px; }
 .result-card { padding: 20px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
 .result-top, .result-actions, .activity-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

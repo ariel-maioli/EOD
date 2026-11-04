@@ -13,20 +13,59 @@
     audit: [],
     editingId: null,
     recoveryMode: false,
-    busy: false
+    busy: false,
+    noticeTimer: null,
+    visitSuccessTimer: null
   };
 
   function showNotice(message, isError = false) {
+    window.clearTimeout(state.noticeTimer);
+    state.noticeTimer = null;
     const notice = byId("notice");
     notice.textContent = message;
     notice.classList.toggle("error", isError);
+    notice.setAttribute("role", isError ? "alert" : "status");
+    notice.setAttribute("aria-live", isError ? "assertive" : "polite");
+    notice.classList.toggle("success-notice", !isError);
     notice.hidden = false;
+    if (isError) {
+      notice.focus({ preventScroll: true });
+      notice.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      state.noticeTimer = window.setTimeout(clearNotice, 4500);
+    }
   }
 
   function clearNotice() {
+    window.clearTimeout(state.noticeTimer);
+    state.noticeTimer = null;
     byId("notice").hidden = true;
     byId("notice").textContent = "";
     byId("notice").classList.remove("error");
+    byId("notice").classList.remove("success-notice");
+    byId("notice").setAttribute("role", "status");
+    byId("notice").setAttribute("aria-live", "polite");
+  }
+
+  function focusPropertyNumber() {
+    byId("property-number").focus();
+  }
+
+  function showVisitSuccess(message) {
+    window.clearTimeout(state.visitSuccessTimer);
+    const notice = byId("visit-success");
+    notice.textContent = message;
+    notice.hidden = false;
+    state.visitSuccessTimer = window.setTimeout(() => {
+      notice.hidden = true;
+      state.visitSuccessTimer = null;
+    }, 4500);
+  }
+
+  function hideVisitSuccess() {
+    window.clearTimeout(state.visitSuccessTimer);
+    state.visitSuccessTimer = null;
+    byId("visit-success").hidden = true;
   }
 
   function setBusy(busy) {
@@ -438,6 +477,7 @@
     byId("visit-date").value = localDateInputValue();
     setView(isAdmin() ? "activity-view" : "form-view");
     await loadData();
+    if (!isAdmin()) focusPropertyNumber();
   }
 
   function resetVisitForm() {
@@ -504,7 +544,8 @@
         if (error) throw error;
         resetVisitForm();
         await loadData();
-        showNotice("Los cambios de la visita se guardaron correctamente.");
+        showVisitSuccess("Los cambios de la visita se guardaron correctamente.");
+        focusPropertyNumber();
       } else {
         const { error } = await state.client.rpc("create_visit", {
           p_property_number: Number(byId("property-number").value),
@@ -516,7 +557,8 @@
         if (error) throw error;
         resetVisitForm();
         await loadData();
-        showNotice("La visita se registró correctamente.");
+        showVisitSuccess("La visita se registró correctamente.");
+        focusPropertyNumber();
       }
     } catch (error) {
       showNotice(humanError(error), true);
@@ -839,9 +881,13 @@
     document.querySelectorAll(".tab-button").forEach((button) => {
       button.addEventListener("click", async () => {
         clearNotice();
+        hideVisitSuccess();
         setView(button.dataset.view);
         try {
           await loadData();
+          if (button.dataset.view === "form-view" && !state.editingId) {
+            focusPropertyNumber();
+          }
         } catch (error) {
           showNotice(`No se pudieron actualizar los datos de esta sección. ${humanError(error)}`, true);
         }
@@ -855,6 +901,7 @@
     byId("notes").addEventListener("input", (event) => {
       byId("notes-count").textContent = String(event.target.value.length);
     });
+    byId("property-number").addEventListener("input", hideVisitSuccess);
     byId("cancel-edit").addEventListener("click", resetVisitForm);
     byId("visit-results").addEventListener("click", (event) => {
       const actionElement = event.target.closest("[data-action]");

@@ -25,7 +25,7 @@
       <p>Completá la URL del proyecto y la clave pública en <code>config.js</code>. Encontrás los pasos en el README del proyecto.</p>
     </section>
 
-    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <div id="notice" class="notice" role="status" aria-live="polite" tabindex="-1" hidden></div>
 
     <section id="login-panel" class="card auth-card" hidden>
       <div class="eyebrow">Mantenimiento de predios</div>
@@ -85,6 +85,7 @@
               <h2 id="visit-form-title">Registrar una visita</h2>
             </div>
           </div>
+          <div id="visit-success" class="notice" role="status" aria-live="polite" hidden></div>
           <p id="edit-hint" class="muted" hidden>El número de predio no se puede cambiar al editar una visita.</p>
           <form id="visit-form" class="form-grid">
             <label class="field" for="property-number">
