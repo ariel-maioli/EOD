@@ -537,18 +537,15 @@
       .filter((visit) => !visit.paid_at && (isAdmin() || visit.created_by === state.user?.id))
       .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at));
-    const recentPendingVisits = pendingVisits.slice(0, 15);
     const pendingContainer = byId("pending-payments-list");
-    byId("pending-visit-count").textContent = pendingVisits.length > 15
-      ? `Últimas 15 de ${pendingVisits.length}`
-      : `${pendingVisits.length} ${pendingVisits.length === 1 ? "visita" : "visitas"}`;
+    byId("pending-visit-count").textContent = `${pendingVisits.length} ${pendingVisits.length === 1 ? "visita" : "visitas"}`;
 
-    if (!recentPendingVisits.length) {
+    if (!pendingVisits.length) {
       pendingContainer.innerHTML = '<div class="empty-state">No hay visitas pendientes de pago.</div>';
       return;
     }
 
-    pendingContainer.innerHTML = recentPendingVisits.map((visit) => `
+    pendingContainer.innerHTML = pendingVisits.map((visit) => `
       <article class="payment-row${isAdmin() ? " payment-row-admin" : ""}">
         <strong>${escapeHtml(visit.property_number)}</strong>
         <span class="payment-date">${escapeHtml(formatDate(visit.visit_date))}</span>
