@@ -7,7 +7,9 @@
     client: null,
     user: null,
     profile: null,
+    activeView: null,
     visits: [],
+    paymentDetails: new Map(),
     properties: [],
     profiles: [],
     audit: [],
@@ -15,7 +17,9 @@
     recoveryMode: false,
     busy: false,
     noticeTimer: null,
-    visitSuccessTimer: null
+    visitSuccessTimer: null,
+    searchRequestId: 0,
+    searchTimer: null
   };
 
   function showNotice(message, isError = false) {
@@ -150,6 +154,9 @@
   }
 
   function setView(viewId) {
+    state.activeView = viewId;
+    state.searchRequestId += 1;
+    window.clearTimeout(state.searchTimer);
     document.querySelectorAll(".view-panel").forEach((panel) => {
       panel.hidden = panel.id !== viewId;
     });
@@ -163,6 +170,8 @@
   }
 
   function showLoggedOut() {
+    state.searchRequestId += 1;
+    window.clearTimeout(state.searchTimer);
     byId("application").hidden = true;
     byId("session-area").hidden = true;
     byId("login-panel").hidden = false;
@@ -174,7 +183,9 @@
     state.recoveryMode = false;
     state.user = null;
     state.profile = null;
+    state.activeView = null;
     state.visits = [];
+    state.paymentDetails = new Map();
     state.properties = [];
     state.profiles = [];
     state.audit = [];
@@ -202,32 +213,94 @@
     return `${window.location.origin}${window.location.pathname}`;
   }
 
-  async function loadData() {
-    const [visitsResult, paymentsResult, propertiesResult, profilesResult] = await Promise.all([
-      state.client.from("visits")
-        .select("id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by")
-        .order("visit_date", { ascending: false }),
-      state.client.rpc("get_visible_visit_payments"),
-      state.client.from("properties").select("*"),
-      state.client.from("profiles").select("id,email,display_name,role")
-    ]);
+  const visitColumns = "id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
 
-    const failure = [visitsResult, paymentsResult, propertiesResult, profilesResult].find((result) => result.error);
-    if (failure) throw failure.error;
+  function orderedVisitsQuery(includeCount = false) {
+    return state.client.from("visits")
+      .select(visitColumns, includeCount ? { count: "exact" } : undefined)
+      .order("visit_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true });
+  }
 
-    const paymentDetails = new Map(
-      (paymentsResult.data || []).map((payment) => [payment.visit_id, payment])
+  async function fetchAllVisits() {
+    const visits = [];
+    const pageSize = 500;
+    let offset = 0;
+    let totalCount = 0;
+    do {
+      const { data, error, count } = await orderedVisitsQuery(true)
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      if (count === null) throw new Error("Supabase no devolvió el total de visitas para completar la búsqueda.");
+      visits.push(...(data || []));
+      totalCount = count || 0;
+      offset += (data || []).length;
+      if (!data?.length && visits.length < totalCount) {
+        throw new Error("La búsqueda de visitas quedó incompleta.");
+      }
+    } while (visits.length < totalCount);
+    return visits;
+  }
+
+  function searchUsesAllVisits() {
+    return Boolean(
+      byId("search-query").value.trim()
+      || byId("filter-from").value
+      || byId("filter-to").value
+      || (isAdmin() && byId("filter-user").value)
+      || (isAdmin() && byId("filter-status").value !== "active")
     );
-    state.visits = (visitsResult.data || []).map((visit) => {
-      const payment = paymentDetails.get(visit.id);
+  }
+
+  async function fetchSearchVisits() {
+    if (searchUsesAllVisits()) return fetchAllVisits();
+
+    const { data, error } = await orderedVisitsQuery()
+      .eq("created_by", state.user.id)
+      .limit(25);
+    if (error) throw error;
+    return data || [];
+  }
+
+  function attachVisiblePayments(visits) {
+    return visits.map((visit) => {
+      const payment = state.paymentDetails.get(visit.id);
       return {
         ...visit,
         paid_at: payment?.paid_at || null,
         paid_by: payment?.paid_by || null
       };
     });
+  }
+
+  async function loadData() {
+    const [paymentsResult, propertiesResult, profilesResult] = await Promise.all([
+      state.client.rpc("get_visible_visit_payments"),
+      state.client.from("properties").select("*"),
+      state.client.from("profiles").select("id,email,display_name,role")
+    ]);
+
+    const failure = [paymentsResult, propertiesResult, profilesResult].find((result) => result.error);
+    if (failure) throw failure.error;
+
+    state.paymentDetails = new Map(
+      (paymentsResult.data || []).map((payment) => [payment.visit_id, payment])
+    );
     state.properties = propertiesResult.data || [];
     state.profiles = profilesResult.data || [];
+
+    if (state.activeView === "search-view") {
+      const requestId = ++state.searchRequestId;
+      const visits = attachVisiblePayments(await fetchSearchVisits());
+      if (requestId === state.searchRequestId && state.activeView === "search-view") {
+        state.visits = visits;
+      }
+    } else if (state.activeView === "payments-view") {
+      state.visits = attachVisiblePayments(await fetchAllVisits());
+    } else {
+      state.visits = [];
+    }
 
     if (isAdmin()) {
       const since = new Date();
@@ -265,6 +338,10 @@
   }
 
   function filteredVisits(activeOnly = false) {
+    return filteredVisitsFrom(state.visits, activeOnly);
+  }
+
+  function filteredVisitsFrom(visits, activeOnly = false) {
     const query = normalize(byId("search-query").value.trim());
     const queryDigits = query.replace(/\D/g, "");
     const from = byId("filter-from").value;
@@ -272,7 +349,7 @@
     const userId = isAdmin() ? byId("filter-user").value : "";
     const status = activeOnly || !isAdmin() ? "active" : byId("filter-status").value;
 
-    return state.visits.filter((visit) => {
+    return visits.filter((visit) => {
       const property = propertyFor(visit.property_number);
       const parentArchived = Boolean(property?.archived_at);
       const isArchived = Boolean(visit.archived_at || parentArchived);
@@ -303,6 +380,7 @@
   function renderVisits() {
     const results = filteredVisits();
     const container = byId("visit-results");
+    byId("search-default-hint").hidden = searchUsesAllVisits();
     byId("result-count").textContent = `${results.length} ${results.length === 1 ? "visita" : "visitas"}`;
 
     if (!results.length) {
@@ -366,6 +444,30 @@
           <div class="result-actions">${editButton}${visitButton}${propertyButton}</div>
         </article>`;
     }).join("");
+  }
+
+  function refreshSearchVisits() {
+    window.clearTimeout(state.searchTimer);
+    const requestId = ++state.searchRequestId;
+    const searchingAll = searchUsesAllVisits();
+    byId("search-default-hint").hidden = searchingAll;
+    byId("result-count").textContent = searchingAll
+      ? "Buscando en todos los registros…"
+      : "Cargando tus últimas visitas…";
+    byId("visit-results").innerHTML = "";
+
+    state.searchTimer = window.setTimeout(async () => {
+      try {
+        const visits = attachVisiblePayments(await fetchSearchVisits());
+        if (requestId !== state.searchRequestId || state.activeView !== "search-view") return;
+        state.visits = visits;
+        renderVisits();
+      } catch (error) {
+        if (requestId !== state.searchRequestId || state.activeView !== "search-view") return;
+        byId("result-count").textContent = "No se pudieron cargar las visitas.";
+        showNotice(`No se pudieron buscar las visitas. ${humanError(error)}`, true);
+      }
+    }, 250);
   }
 
   function renderPayments() {
@@ -681,6 +783,15 @@
     showNotice(`Se exportaron ${visits.length} ${visits.length === 1 ? "visita" : "visitas"} a CSV.`);
   }
 
+  async function exportAllActiveVisits() {
+    try {
+      const visits = attachVisiblePayments(await fetchAllVisits());
+      exportCsv(filteredVisitsFrom(visits, true), "todos-activos");
+    } catch (error) {
+      showNotice(`No se pudieron cargar todas las visitas para exportar. ${humanError(error)}`, true);
+    }
+  }
+
   function paymentIssue(propertyNumber, status, result) {
     if (status === "invalid") return `“${propertyNumber}” no tiene el formato de un predio de 6 dígitos sin cero inicial.`;
     if (status === "not_found") return `El predio ${propertyNumber} no existe.`;
@@ -916,7 +1027,7 @@
     });
 
     ["search-query", "filter-from", "filter-to", "filter-user", "filter-status"].forEach((id) => {
-      byId(id).addEventListener(id === "search-query" ? "input" : "change", renderVisits);
+      byId(id).addEventListener(id === "search-query" ? "input" : "change", refreshSearchVisits);
     });
 
     byId("notes").addEventListener("input", (event) => {
@@ -937,7 +1048,7 @@
       if (button) correctPayment(button.dataset.id);
     });
     byId("export-filtered").addEventListener("click", () => exportCsv(filteredVisits(), "filtrados"));
-    byId("export-all").addEventListener("click", () => exportCsv(filteredVisits(true), "todos-activos"));
+    byId("export-all").addEventListener("click", exportAllActiveVisits);
   }
 
   async function start() {

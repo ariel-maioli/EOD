@@ -53,7 +53,7 @@ No necesitás ejecutar scripts de migración separados: `schema.sql` es la fuent
 
 ## Buscar visitas
 
-La búsqueda admite número de predio, nombre de contacto o celular y filtros por fecha. Los resultados se ordenan por fecha de visita descendente; si coinciden, se prioriza el registro más reciente.
+Al abrir **Buscar visitas**, cada usuario ve sus últimas 25 visitas. Al escribir un predio, nombre o celular, indicar fechas o (para el administrador) cambiar técnico o estado, la aplicación busca en todos los registros que ese usuario puede consultar. La consulta completa se pagina para no quedar limitada al máximo de filas de una sola respuesta de Supabase. Los resultados se ordenan por fecha de visita descendente; si coinciden, se prioriza el registro más reciente.
 
 - **Técnicos:** en la pantalla de búsqueda, la aplicación muestra solo predios activos y los datos básicos de cada visita: número, fecha, contacto y celular. No tienen filtros por técnico ni por estado. Cada fila permite abrir WhatsApp para el número argentino o copiar el celular. Esta limitación de campos corresponde a la interfaz; no implica que todas las demás columnas estén restringidas en la API de Supabase.
 - **Administrador:** conserva acceso a visitas activas y archivadas, ve los detalles y acciones administrativas, y puede filtrar por técnico y estado.
