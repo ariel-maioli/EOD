@@ -51,6 +51,9 @@ body {
 
 .session-area { display: flex; align-items: center; gap: 14px; }
 .session-email { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.view-as-control { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: .82rem; }
+.view-as-control select { min-height: 38px; max-width: 190px; padding: 6px 9px; border: 1px solid #c8d5db; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
+.view-as-control select:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
 .page { width: min(100% - 32px, 920px); margin: 36px auto 64px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px; box-shadow: 0 8px 26px rgb(23 43 58 / 4%); }
 .auth-card { width: min(100%, 430px); margin: 8vh auto; }
@@ -72,7 +75,6 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .view-panel > .card { margin-bottom: 18px; }
 
 .stack { display: grid; gap: 11px; }
-.auth-link { margin-top: 12px; padding-left: 0; }
 .form-grid, .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
 .filters { grid-template-columns: 2fr repeat(2, 1fr); align-items: end; }
 .field { display: grid; align-content: start; gap: 7px; min-width: 0; font-size: .92rem; font-weight: 650; }
@@ -162,6 +164,8 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   .brand span { display: block; font-size: .75rem; }
   .session-area { gap: 6px; flex-direction: column; align-items: flex-end; }
   .session-email { max-width: 52vw; font-size: .75rem; }
+  .view-as-control { flex-direction: column; align-items: flex-end; gap: 3px; }
+  .view-as-control select { max-width: 52vw; }
   .page { width: min(100% - 22px, 920px); margin: 22px auto 44px; }
   .card { padding: 19px; border-radius: 13px; }
   .form-grid, .filters { grid-template-columns: 1fr; gap: 14px; }

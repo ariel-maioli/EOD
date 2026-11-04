@@ -14,7 +14,7 @@
     profiles: [],
     audit: [],
     editingId: null,
-    recoveryMode: false,
+    viewAsTechnicianId: "",
     maintenanceEnabled: false,
     busy: false,
     noticeTimer: null,
@@ -78,6 +78,7 @@
     document.querySelectorAll("button").forEach((button) => {
       button.disabled = busy;
     });
+    byId("view-as-technician").disabled = busy;
   }
 
   function escapeHtml(value) {
@@ -168,6 +169,23 @@
 
   function isAdmin() {
     return state.profile?.role === "admin";
+  }
+
+  function isTechnicianPreview() {
+    return isAdmin() && Boolean(state.viewAsTechnicianId);
+  }
+
+  function canUseAdminFeatures() {
+    return isAdmin() && !isTechnicianPreview();
+  }
+
+  function isTechnicianExperience() {
+    return !isAdmin() || isTechnicianPreview();
+  }
+
+  function dataUserId() {
+    if (isTechnicianPreview()) return state.viewAsTechnicianId;
+    return isAdmin() ? "" : state.user?.id || "";
   }
 
   async function closeSessionForMaintenance() {
@@ -262,42 +280,18 @@
     byId("application").hidden = true;
     byId("session-area").hidden = true;
     byId("login-panel").hidden = false;
-    byId("recovery-panel").hidden = true;
     byId("login-form").hidden = false;
-    byId("forgot-password-form").hidden = true;
-    byId("show-forgot-password").hidden = false;
     byId("login-password").value = "";
-    state.recoveryMode = false;
     state.user = null;
     state.profile = null;
     state.activeView = null;
+    state.viewAsTechnicianId = "";
     state.visits = [];
     state.paymentDetails = new Map();
     state.properties = [];
     state.profiles = [];
     state.audit = [];
     state.editingId = null;
-  }
-
-  function showRecoveryPanel() {
-    state.recoveryMode = true;
-    byId("application").hidden = true;
-    byId("login-panel").hidden = true;
-    byId("recovery-panel").hidden = false;
-    byId("session-area").hidden = true;
-  }
-
-  function showForgotPasswordForm() {
-    clearNotice();
-    byId("login-form").hidden = true;
-    byId("show-forgot-password").hidden = true;
-    byId("forgot-password-form").hidden = false;
-    byId("recovery-email").value = byId("login-email").value.trim();
-    byId("recovery-email").focus();
-  }
-
-  function recoveryRedirectUrl() {
-    return `${window.location.origin}${window.location.pathname}`;
   }
 
   const visitColumns = "id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
@@ -335,16 +329,18 @@
       byId("search-query").value.trim()
       || byId("filter-from").value
       || byId("filter-to").value
-      || (isAdmin() && byId("filter-user").value)
-      || (isAdmin() && byId("filter-status").value !== "active")
+      || (canUseAdminFeatures() && byId("filter-user").value)
+      || (canUseAdminFeatures() && byId("filter-status").value !== "active")
     );
   }
 
   async function fetchSearchVisits() {
     if (searchUsesAllVisits()) return fetchAllVisits();
 
+    const userId = isTechnicianPreview() ? state.viewAsTechnicianId : state.user?.id;
+    if (!userId) return fetchAllVisits();
     const { data, error } = await orderedVisitsQuery()
-      .eq("created_by", state.user.id)
+      .eq("created_by", userId)
       .limit(25);
     if (error) throw error;
     return data || [];
@@ -376,6 +372,8 @@
     );
     state.properties = propertiesResult.data || [];
     state.profiles = profilesResult.data || [];
+    renderViewAsSelector();
+    configureRoleExperience();
 
     if (state.activeView === "search-view") {
       const requestId = ++state.searchRequestId;
@@ -424,6 +422,74 @@
     if (state.profiles.some((profile) => profile.id === selected)) select.value = selected;
   }
 
+  function renderViewAsSelector() {
+    const select = byId("view-as-technician");
+    const selected = state.viewAsTechnicianId;
+    const technicians = state.profiles
+      .filter((profile) => profile.role === "technician")
+      .sort((a, b) => profileName(a.id).localeCompare(profileName(b.id), "es"));
+    select.innerHTML = [
+      '<option value="">Administrador</option>',
+      ...technicians.map((profile) =>
+        `<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}</option>`)
+    ].join("");
+    if (technicians.some((profile) => profile.id === selected)) {
+      select.value = selected;
+    } else {
+      state.viewAsTechnicianId = "";
+      select.value = "";
+    }
+  }
+
+  function configureRoleExperience() {
+    const adminFeaturesEnabled = canUseAdminFeatures();
+    const technicianPreview = isTechnicianPreview();
+    const experienceProfile = technicianPreview
+      ? state.profiles.find((profile) => profile.id === state.viewAsTechnicianId)
+      : state.profile;
+
+    byId("view-as-control").hidden = !isAdmin();
+    byId("view-as-notice").hidden = !technicianPreview;
+    byId("role-badge").textContent = technicianPreview
+      ? "Técnico · solo lectura"
+      : isAdmin() ? "Administrador" : "Técnico";
+    byId("welcome-title").textContent = `${greetingForCurrentTime()}, ${profileName(experienceProfile?.id || state.user?.id)}`;
+    byId("activity-tab").hidden = !adminFeaturesEnabled;
+    byId("export-actions").hidden = !adminFeaturesEnabled;
+    byId("payments-form").hidden = !adminFeaturesEnabled;
+    byId("filter-user-field").hidden = !adminFeaturesEnabled;
+    byId("filter-status-field").hidden = !adminFeaturesEnabled;
+    byId("payments-info").textContent = adminFeaturesEnabled
+      ? "Ingresar números de predio separados por coma. Se marcará la visita activa más reciente de cada uno."
+      : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
+
+    byId("visit-form-title").textContent = technicianPreview
+      ? "Vista previa del formulario de visita"
+      : "Registrar una visita";
+    byId("visit-form").querySelectorAll("input, textarea, button").forEach((control) => {
+      control.disabled = technicianPreview;
+    });
+  }
+
+  async function changeTechnicianPreview(technicianId) {
+    const technician = state.profiles.find((profile) =>
+      profile.id === technicianId && profile.role === "technician");
+    if (technicianId && !technician) {
+      throw new Error("No se encontró el técnico seleccionado.");
+    }
+
+    state.viewAsTechnicianId = technicianId;
+    byId("filter-user").value = "";
+    byId("filter-status").value = "active";
+    byId("search-query").value = "";
+    byId("filter-from").value = "";
+    byId("filter-to").value = "";
+    resetVisitForm();
+    configureRoleExperience();
+    setView(technicianId ? "form-view" : "activity-view");
+    await loadData();
+  }
+
   function filteredVisits(activeOnly = false) {
     return filteredVisitsFrom(state.visits, activeOnly);
   }
@@ -433,17 +499,21 @@
     const queryDigits = query.replace(/\D/g, "");
     const from = byId("filter-from").value;
     const to = byId("filter-to").value;
-    const userId = isAdmin() ? byId("filter-user").value : "";
-    const status = activeOnly || !isAdmin() ? "active" : byId("filter-status").value;
+    const userId = isTechnicianPreview()
+      ? state.viewAsTechnicianId
+      : canUseAdminFeatures() ? byId("filter-user").value : "";
+    const status = activeOnly || isTechnicianExperience()
+      ? "active"
+      : byId("filter-status").value;
 
     return visits.filter((visit) => {
       const property = propertyFor(visit.property_number);
       const parentArchived = Boolean(property?.archived_at);
       const isArchived = Boolean(visit.archived_at || parentArchived);
-      if (!isAdmin() && (!property || isArchived)) return false;
+      if (isTechnicianExperience() && (!property || isArchived)) return false;
       if (status === "active" && isArchived) return false;
       if (status === "archived" && !isArchived) return false;
-      if (status === "all" && !isAdmin() && isArchived) return false;
+      if (status === "all" && isTechnicianExperience() && isArchived) return false;
       if (from && visit.visit_date < from) return false;
       if (to && visit.visit_date > to) return false;
       if (userId && visit.created_by !== userId) return false;
@@ -476,7 +546,7 @@
     }
 
     container.innerHTML = results.map((visit) => {
-      if (!isAdmin()) {
+      if (isTechnicianExperience()) {
         const phone = String(visit.cellphone).replace(/\D/g, "");
         const whatsappUrl = `https://wa.me/549${phone}`;
         return `
@@ -499,18 +569,22 @@
       const property = propertyFor(visit.property_number);
       const archived = Boolean(visit.archived_at || property?.archived_at);
       const parentArchived = Boolean(property?.archived_at);
-      const canArchiveProperty = isAdmin() && property;
-      const visitButton = isAdmin()
+      const canArchiveProperty = canUseAdminFeatures() && property;
+      const visitButton = canUseAdminFeatures()
         ? `<button class="button button-small button-secondary" type="button" data-action="toggle-visit" data-id="${escapeHtml(visit.id)}" data-archived="${Boolean(visit.archived_at)}">${visit.archived_at ? "Restaurar visita" : "Archivar visita"}</button>`
         : "";
       const propertyButton = canArchiveProperty
         ? `<button class="button button-small button-secondary" type="button" data-action="toggle-property" data-number="${escapeHtml(visit.property_number)}" data-archived="${parentArchived}">${parentArchived ? "Restaurar predio" : "Archivar predio"}</button>`
         : "";
-      const canEdit = !archived && (isAdmin() || visit.created_by === state.user?.id);
+      const canEdit = !archived && (
+        canUseAdminFeatures()
+        || (!isAdmin() && visit.created_by === state.user?.id)
+      );
       const editButton = canEdit
         ? `<button class="button button-small button-quiet" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}">Editar</button>`
         : "";
-      const canViewPayment = isAdmin() || visit.created_by === state.user?.id;
+      const canViewPayment = canUseAdminFeatures()
+        || visit.created_by === (isTechnicianPreview() ? state.viewAsTechnicianId : state.user?.id);
       const paymentStatus = !canViewPayment
         ? ""
         : visit.paid_at
@@ -558,9 +632,10 @@
   }
 
   function renderPayments() {
+    const currentDataUserId = dataUserId();
     const visiblePaidVisits = state.visits
       .filter((visit) => visit.paid_at
-        && (isAdmin() || visit.created_by === state.user?.id))
+        && (canUseAdminFeatures() || visit.created_by === currentDataUserId))
       .sort((a, b) => b.paid_at.localeCompare(a.paid_at)
         || b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at));
@@ -579,11 +654,11 @@
       container.innerHTML = '<div class="empty-state">Todavía no hay pagos registrados en viernes.</div>';
     } else {
       container.innerHTML = paidVisits.map((visit) => `
-        <article class="payment-row${isAdmin() ? " payment-row-admin" : ""}">
+        <article class="payment-row${canUseAdminFeatures() ? " payment-row-admin" : ""}">
           <strong>${escapeHtml(visit.property_number)}</strong>
           <span class="payment-date">${escapeHtml(formatPaymentDate(visit.paid_at))}</span>
-          ${isAdmin() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
-          ${isAdmin() ? `<button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir</button>` : ""}
+          ${canUseAdminFeatures() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
+          ${canUseAdminFeatures() ? `<button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir</button>` : ""}
         </article>
       `).join("");
     }
@@ -605,7 +680,8 @@
       });
 
     const pendingVisits = [...latestActiveVisitByProperty.values()]
-      .filter((visit) => !visit.paid_at && (isAdmin() || visit.created_by === state.user?.id))
+      .filter((visit) => !visit.paid_at
+        && (canUseAdminFeatures() || visit.created_by === currentDataUserId))
       .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at));
     const pendingContainer = byId("pending-payments-list");
@@ -617,10 +693,10 @@
     }
 
     pendingContainer.innerHTML = pendingVisits.map((visit) => `
-      <article class="payment-row${isAdmin() ? " payment-row-admin" : ""}">
+      <article class="payment-row${canUseAdminFeatures() ? " payment-row-admin" : ""}">
         <strong>${escapeHtml(visit.property_number)}</strong>
         <span class="payment-date">${escapeHtml(formatDate(visit.visit_date))}</span>
-        ${isAdmin() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
+        ${canUseAdminFeatures() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
       </article>
     `).join("");
   }
@@ -722,19 +798,10 @@
     byId("application").hidden = false;
     byId("session-area").hidden = false;
     byId("session-email").textContent = profileName(data.id);
-    byId("welcome-title").textContent = `${greetingForCurrentTime()}, ${profileName(data.id)}`;
-    byId("role-badge").textContent = data.role === "admin" ? "Administrador" : "Técnico";
-    byId("activity-tab").hidden = !isAdmin();
-    byId("export-actions").hidden = !isAdmin();
-    byId("payments-form").hidden = !isAdmin();
-    byId("filter-user-field").hidden = !isAdmin();
-    byId("filter-status-field").hidden = !isAdmin();
-    byId("payments-info").textContent = isAdmin()
-      ? "Ingresar números de predio separados por coma. Se marcará la visita activa más reciente de cada uno."
-      : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
     byId("filter-status").value = "active";
     setVisitDateLimit();
     byId("visit-date").value = localDateInputValue();
+    resetVisitForm();
     setView(isAdmin() ? "activity-view" : "form-view");
     await loadData();
     if (!isAdmin()) focusPropertyNumber();
@@ -755,6 +822,10 @@
   }
 
   function beginEdit(id) {
+    if (isTechnicianPreview()) {
+      showNotice("La vista de técnico es de solo lectura.", true);
+      return;
+    }
     const visit = state.visits.find((item) => item.id === id);
     if (!visit || visit.archived_at || propertyFor(visit.property_number)?.archived_at) {
       showNotice("La visita no está activa y no se puede editar.", true);
@@ -783,6 +854,10 @@
 
   async function saveVisit(event) {
     event.preventDefault();
+    if (isTechnicianPreview()) {
+      showNotice("La vista de técnico es de solo lectura.", true);
+      return;
+    }
     if (state.busy) return;
     clearNotice();
     const form = event.currentTarget;
@@ -854,6 +929,7 @@
   }
 
   async function toggleArchive(button) {
+    if (!canUseAdminFeatures()) return;
     const archived = button.dataset.archived === "true";
     const action = archived ? "restaurar" : "archivar";
     const type = button.dataset.action === "toggle-property" ? "predio" : "visita";
@@ -891,7 +967,7 @@
   }
 
   function exportCsv(visits, label) {
-    if (!isAdmin()) {
+    if (!canUseAdminFeatures()) {
       showNotice("Solo el administrador puede exportar datos.", true);
       return;
     }
@@ -927,6 +1003,7 @@
   }
 
   async function exportAllActiveVisits() {
+    if (!canUseAdminFeatures()) return;
     try {
       const visits = attachVisiblePayments(await fetchAllVisits());
       exportCsv(filteredVisitsFrom(visits, true), "todos-activos");
@@ -948,7 +1025,7 @@
 
   async function processPayments(event) {
     event.preventDefault();
-    if (state.busy || !isAdmin()) return;
+    if (state.busy || !canUseAdminFeatures()) return;
 
     const propertyNumbers = byId("payment-property-list").value
       .split(",")
@@ -1023,7 +1100,7 @@
   }
 
   async function correctPayment(visitId) {
-    if (!isAdmin() || state.busy) return;
+    if (!canUseAdminFeatures() || state.busy) return;
     const visit = state.visits.find((item) => item.id === visitId);
     if (!visit?.paid_at) return;
     if (!window.confirm(`¿Querés quitar la marca de pago del predio ${visit.property_number}? Esta corrección quedará registrada en la auditoría.`)) {
@@ -1081,62 +1158,6 @@
       }
     });
 
-    byId("show-forgot-password").addEventListener("click", showForgotPasswordForm);
-    byId("cancel-forgot-password").addEventListener("click", () => {
-      byId("forgot-password-form").hidden = true;
-      byId("login-form").hidden = false;
-      byId("show-forgot-password").hidden = false;
-      clearNotice();
-    });
-
-    byId("forgot-password-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (state.busy) return;
-      setBusy(true);
-      clearNotice();
-      try {
-        const { error } = await state.client.auth.resetPasswordForEmail(
-          byId("recovery-email").value.trim(),
-          { redirectTo: recoveryRedirectUrl() }
-        );
-        if (error) throw error;
-        showNotice("Si el correo corresponde a una cuenta, recibirás un enlace para cambiar la contraseña. Revisá también el correo no deseado.");
-      } catch (error) {
-        showNotice(humanError(error), true);
-      } finally {
-        setBusy(false);
-      }
-    });
-
-    byId("recovery-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (state.busy) return;
-      clearNotice();
-      if (!event.currentTarget.reportValidity()) return;
-      const password = byId("new-password").value;
-      if (password !== byId("confirm-password").value) {
-        showNotice("Las contraseñas no coinciden.", true);
-        byId("confirm-password").focus();
-        return;
-      }
-
-      setBusy(true);
-      try {
-        const { error } = await state.client.auth.updateUser({ password });
-        if (error) throw error;
-        const { error: signOutError } = await state.client.auth.signOut();
-        if (signOutError) throw signOutError;
-        showLoggedOut();
-        byId("login-email").value = byId("recovery-email").value.trim();
-        history.replaceState(null, document.title, recoveryRedirectUrl());
-        showNotice("Contraseña actualizada. Ya podés ingresar con tu nueva contraseña.");
-      } catch (error) {
-        showNotice(humanError(error), true);
-      } finally {
-        setBusy(false);
-      }
-    });
-
     byId("visit-form").addEventListener("submit", saveVisit);
     byId("payments-form").addEventListener("submit", processPayments);
     byId("sign-out").addEventListener("click", async () => {
@@ -1160,7 +1181,7 @@
         setView(button.dataset.view);
         try {
           await loadData();
-          if (button.dataset.view === "form-view" && !state.editingId) {
+          if (button.dataset.view === "form-view" && !state.editingId && !isTechnicianPreview()) {
             focusPropertyNumber();
           }
         } catch (error) {
@@ -1192,6 +1213,18 @@
     });
     byId("export-filtered").addEventListener("click", () => exportCsv(filteredVisits(), "filtrados"));
     byId("export-all").addEventListener("click", exportAllActiveVisits);
+    byId("view-as-technician").addEventListener("change", async (event) => {
+      if (state.busy || !isAdmin()) return;
+      setBusy(true);
+      clearNotice();
+      try {
+        await changeTechnicianPreview(event.currentTarget.value);
+      } catch (error) {
+        showNotice(`No se pudo cambiar la vista. ${humanError(error)}`, true);
+      } finally {
+        setBusy(false);
+      }
+    });
   }
 
   async function start() {
@@ -1204,30 +1237,26 @@
       return;
     }
 
-    state.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
     const recoveryLink = new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery";
-    if (recoveryLink) showRecoveryPanel();
-    else byId("login-panel").hidden = false;
+    if (recoveryLink) {
+      history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
+    }
+    state.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    byId("login-panel").hidden = false;
+    if (recoveryLink) {
+      showNotice("La recuperación de contraseña no está disponible en EOD. Contactá al administrador.");
+    }
 
     startMaintenanceChecks();
     await refreshMaintenanceStatus();
 
-    state.client.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") showRecoveryPanel();
+    state.client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") showLoggedOut();
     });
 
     const { data, error } = await state.client.auth.getSession();
     if (error) {
       showNotice(humanError(error), true);
-      return;
-    }
-    if (recoveryLink) {
-      if (!data.session) {
-        showNotice("El enlace de recuperación venció o ya fue utilizado. Solicitá uno nuevo e intentá nuevamente.", true);
-        byId("recovery-panel").hidden = true;
-        byId("login-panel").hidden = false;
-      }
       return;
     }
     if (data.session?.user) {

@@ -26,8 +26,7 @@ Aplicación web para registrar y consultar visitas de mantenimiento a predios. L
 
    Pegá la URL completa de **Project URL** en `supabaseUrl` y la clave pública en `supabaseAnonKey`. La clave pública se utiliza desde el navegador y no reemplaza las políticas de acceso. **Nunca uses ni publiques la clave `service_role` o una clave secreta.**
 
-6. En **Authentication → URL Configuration**, configurá **Site URL** con la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`, y agregala también a **Redirect URLs**. Los enlaces de recuperación deben volver a la aplicación publicada.
-7. El usuario puede seleccionar **Olvidé mi contraseña** en el inicio de sesión. El administrador también puede enviar un enlace desde **Authentication → Users**. El enlace permite elegir una contraseña nueva en EOD.
+6. En **Authentication → URL Configuration**, configurá **Site URL** con la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`. EOD no ofrece recuperación ni cambio de contraseña desde la interfaz; quitar esa opción no impide que Supabase Auth permita cambiarla por otros medios.
 
 ## Actualizar un proyecto Supabase existente
 
@@ -39,6 +38,8 @@ No necesitás ejecutar scripts de migración separados: `schema.sql` es la fuent
 
 - **Técnicos:** pueden registrar visitas y editar las visitas activas que registraron ellos mismos.
 - **Administrador:** puede editar visitas de cualquier técnico, archivar y restaurar visitas o predios, procesar y corregir pagos, consultar actividad y exportar CSV.
+- El administrador puede elegir un técnico en **Ver como** para revisar sus datos y la interfaz de técnico. Es una vista de solo lectura: no cambia la sesión ni los permisos reales del administrador.
+- La vista previa sirve para comprobar la presentación y los datos filtrados, no para verificar permisos reales de un técnico.
 - Los datos se vuelven a cargar al entrar en cada sección. Al actualizar la página, la sesión existente se restaura y se vuelven a cargar los datos.
 - El saludo cambia según la hora de Argentina: «Buenos días» (05:00–11:59), «Buenas tardes» (12:00–19:59) y «Buenas noches» (20:00–04:59).
 
