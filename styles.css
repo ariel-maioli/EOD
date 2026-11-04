@@ -87,6 +87,12 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 }
 .field textarea { resize: vertical; }
 .field input:focus, .field textarea:focus, .field select:focus, .stack input:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
+.payments-form { max-width: 620px; margin: 20px 0 28px; }
+.payments-form textarea { width: 100%; padding: 11px 12px; border: 1px solid #c8d5db; border-radius: 9px; color: var(--ink); font: inherit; resize: vertical; }
+.payments-form textarea:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
+.payments-form small { color: var(--muted); line-height: 1.5; }
+.payments-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.payments-history-heading h3 { margin: 0 0 12px; font-size: 1rem; }
 .field input:disabled { background: #edf2f4; color: var(--muted); }
 .field small { font-size: .78rem; font-weight: 400; }
 .field-full { grid-column: 1 / -1; }
@@ -116,6 +122,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .result-notes { margin-top: 12px !important; padding: 10px 12px; border-radius: 8px; background: #f5f8f9; white-space: pre-wrap; }
 .result-actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 15px; }
 .state-label { padding: 4px 9px; border-radius: 999px; background: var(--accent); color: var(--primary-dark); font-size: .76rem; font-weight: 700; }
+.state-label.unpaid { background: #edf1f3; color: var(--muted); }
 .state-label.archived { background: #f4e8e7; color: var(--danger); }
 .empty-state { padding: 26px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed #c8d5db; border-radius: 12px; }
 .activity-entry { padding: 15px 0; border-bottom: 1px solid var(--line); }

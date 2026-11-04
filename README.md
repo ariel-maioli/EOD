@@ -37,6 +37,10 @@ Para un proyecto que ya ejecutó el esquema inicial, ejecutá [`profile_display_
 
 Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_edit_permissions.sql`](./visit_edit_permissions.sql) en **SQL Editor**. Desde entonces, cada técnico puede editar solo sus visitas activas; el administrador conserva permiso para editar cualquier visita. La regla se valida tanto en la interfaz como en las políticas de la base de datos.
 
+## Pagos
+
+Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_payments.sql`](./visit_payments.sql) en **SQL Editor**. Solo el administrador puede procesar listas de predios separados por coma; se marca la visita activa más reciente y se registra la fecha y quién realizó el proceso. Todos los usuarios autenticados pueden consultar el estado y la fecha de pago. Si un predio no existe, está archivado, no tiene visitas activas o la visita ya está abonada, la app informa el motivo y pregunta si continúa con los siguientes números. Las correcciones del pago están disponibles únicamente para el admin y quedan auditadas.
+
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí `main` y la carpeta `/ (root)`, y guardá. La URL pública servirá los archivos de este repositorio; para usar los datos se requiere iniciar sesión.
@@ -47,6 +51,7 @@ En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, e
 - Alta de visitas y edición de visitas activas.
 - Búsqueda por número de predio, nombre o celular; filtros por fechas, técnico y estado.
 - Archivo y restauración de visitas/predios, solo para el administrador.
+- Estado de pago y fecha en las visitas; el administrador puede marcar/corregir pagos desde la sección Pagos.
 - Actividad de auditoría de los últimos 30 días en la pantalla del administrador. La base conserva el historial sin purgarlo automáticamente.
 - Exportación CSV para el administrador: resultados filtrados o todos los registros activos.
 

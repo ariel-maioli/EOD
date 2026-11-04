@@ -73,6 +73,7 @@
       <nav class="tabs" aria-label="Secciones">
         <button class="tab-button" type="button" data-view="form-view">Nueva visita</button>
         <button class="tab-button" type="button" data-view="search-view">Buscar visitas</button>
+        <button class="tab-button" type="button" data-view="payments-view">Pagos</button>
         <button id="activity-tab" class="tab-button" type="button" data-view="activity-view" hidden>Actividad reciente</button>
       </nav>
 
@@ -167,6 +168,25 @@
           <h2>Actividad reciente</h2>
           <p class="muted">Cambios realizados durante los últimos 30 días. El historial completo se conserva en la base de datos.</p>
           <div id="activity-list" class="activity-list"></div>
+        </div>
+      </section>
+
+      <section id="payments-view" class="view-panel" hidden>
+        <div class="card">
+          <div class="eyebrow">Estado de pagos</div>
+          <h2>Pagos</h2>
+          <p id="payments-intro" class="muted">Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.</p>
+          <form id="payments-form" class="stack payments-form" hidden>
+            <label for="payment-property-list">Predios a marcar como abonados</label>
+            <textarea id="payment-property-list" rows="3" placeholder="Ej.: 123456, 234567, 345678"></textarea>
+            <small>Ingresá números de predio separados por coma. Se marcará la visita activa más reciente de cada uno.</small>
+            <button class="button button-primary" type="submit">Procesar pagos</button>
+          </form>
+          <div class="payments-history-heading">
+            <h3>Visitas abonadas</h3>
+            <span id="paid-visit-count" class="muted"></span>
+          </div>
+          <div id="payments-list" class="results-list" aria-live="polite"></div>
         </div>
       </section>
     </section>

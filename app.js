@@ -57,6 +57,16 @@
     return `${day}/${month}/${year.slice(-2)}`;
   }
 
+  function formatPaymentDate(value) {
+    if (!value) return "Sin fecha";
+    return new Intl.DateTimeFormat("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      timeZone: "America/Argentina/Buenos_Aires"
+    }).format(new Date(value));
+  }
+
   function formatDateTime(value) {
     return new Intl.DateTimeFormat("es-AR", {
       dateStyle: "short",
@@ -169,6 +179,7 @@
 
     renderUserFilter();
     renderVisits();
+    renderPayments();
     renderActivity();
   }
 
@@ -246,6 +257,9 @@
       const editButton = canEdit
         ? `<button class="button button-small button-quiet" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}">Editar</button>`
         : "";
+      const paymentStatus = visit.paid_at
+        ? `<p class="result-meta"><span class="state-label">Abonada</span> · ${escapeHtml(formatPaymentDate(visit.paid_at))}</p>`
+        : '<p class="result-meta"><span class="state-label unpaid">Sin abonar</span></p>';
 
       return `
         <article class="result-card">
@@ -256,10 +270,37 @@
           <p><strong>Contacto:</strong> ${escapeHtml(visit.contact_name)}</p>
           <p><strong>Celular:</strong> ${escapeHtml(visit.cellphone)}</p>
           ${visit.notes ? `<p class="result-notes"><strong>Notas:</strong> ${escapeHtml(visit.notes)}</p>` : ""}
+          ${paymentStatus}
           <p class="result-meta">Registró ${escapeHtml(profileName(visit.created_by))} · Última edición ${escapeHtml(profileName(visit.updated_by))}</p>
           <div class="result-actions">${editButton}${visitButton}${propertyButton}</div>
         </article>`;
     }).join("");
+  }
+
+  function renderPayments() {
+    const paidVisits = state.visits
+      .filter((visit) => visit.paid_at)
+      .sort((a, b) => b.paid_at.localeCompare(a.paid_at));
+    const container = byId("payments-list");
+    byId("paid-visit-count").textContent = `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
+
+    if (!paidVisits.length) {
+      container.innerHTML = '<div class="empty-state">Todavía no hay visitas marcadas como abonadas.</div>';
+      return;
+    }
+
+    container.innerHTML = paidVisits.map((visit) => `
+      <article class="result-card">
+        <div class="result-top">
+          <h3>Predio ${escapeHtml(visit.property_number)} · visita del ${escapeHtml(formatDate(visit.visit_date))}</h3>
+          <span class="state-label">Abonada</span>
+        </div>
+        <p><strong>Contacto:</strong> ${escapeHtml(visit.contact_name)}</p>
+        <p><strong>Fecha de pago:</strong> ${escapeHtml(formatPaymentDate(visit.paid_at))}</p>
+        <p class="result-meta">Registró el pago ${escapeHtml(profileName(visit.paid_by))}</p>
+        ${isAdmin() ? `<div class="result-actions"><button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir pago</button></div>` : ""}
+      </article>
+    `).join("");
   }
 
   function changedFields(entry) {
@@ -318,6 +359,10 @@
     byId("role-badge").textContent = data.role === "admin" ? "Administrador" : "Técnico";
     byId("activity-tab").hidden = !isAdmin();
     byId("export-actions").hidden = !isAdmin();
+    byId("payments-form").hidden = !isAdmin();
+    byId("payments-intro").textContent = isAdmin()
+      ? "Ingresá predios separados por coma. Se marcará la visita activa más reciente de cada uno; solo el administrador puede registrar pagos."
+      : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
     byId("filter-status").value = "active";
     byId("visit-date").value = localDateInputValue();
     setView(isAdmin() ? "activity-view" : "form-view");
@@ -471,7 +516,7 @@
       showNotice("Solo el administrador puede exportar datos.", true);
       return;
     }
-    const headings = ["Predio", "Fecha", "Nombre", "Celular", "Notas", "Estado", "Creado por", "Creado", "Última edición por", "Última edición"];
+    const headings = ["Predio", "Fecha", "Nombre", "Celular", "Notas", "Estado", "Abonada", "Fecha de pago", "Creado por", "Creado", "Última edición por", "Última edición"];
     const rows = visits.map((visit) => {
       const archived = Boolean(visit.archived_at || propertyFor(visit.property_number)?.archived_at);
       return [
@@ -481,6 +526,8 @@
         visit.cellphone,
         visit.notes || "",
         archived ? "Archivado" : "Activo",
+        visit.paid_at ? "Sí" : "No",
+        visit.paid_at ? formatPaymentDate(visit.paid_at) : "",
         profileName(visit.created_by),
         formatDateTime(visit.created_at),
         profileName(visit.updated_by),
@@ -498,6 +545,119 @@
     link.remove();
     URL.revokeObjectURL(url);
     showNotice(`Se exportaron ${visits.length} ${visits.length === 1 ? "visita" : "visitas"} a CSV.`);
+  }
+
+  function paymentIssue(propertyNumber, status, result) {
+    if (status === "invalid") return `“${propertyNumber}” no tiene el formato de un predio de 6 dígitos sin cero inicial.`;
+    if (status === "not_found") return `El predio ${propertyNumber} no existe.`;
+    if (status === "property_archived") return `El predio ${propertyNumber} está archivado.`;
+    if (status === "no_visit") return `El predio ${propertyNumber} no tiene visitas activas.`;
+    if (status === "already_paid") {
+      return `La visita más reciente del predio ${propertyNumber} ya figura abonada el ${formatPaymentDate(result.paid_at)}.`;
+    }
+    return `No se pudo procesar el predio ${propertyNumber}.`;
+  }
+
+  async function processPayments(event) {
+    event.preventDefault();
+    if (state.busy || !isAdmin()) return;
+
+    const propertyNumbers = byId("payment-property-list").value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!propertyNumbers.length) {
+      showNotice("Ingresá al menos un número de predio.", true);
+      return;
+    }
+
+    clearNotice();
+    setBusy(true);
+    const processed = [];
+    let stoppedAt = null;
+    let requestError = null;
+
+    try {
+      for (const token of propertyNumbers) {
+        if (!/^[1-9][0-9]{5}$/.test(token)) {
+          const issue = paymentIssue(token, "invalid");
+          if (!window.confirm(`${issue}\n\n¿Querés continuar con los demás predios?`)) {
+            stoppedAt = token;
+            break;
+          }
+          processed.push({ propertyNumber: token, status: "skipped" });
+          continue;
+        }
+
+        const { data, error } = await state.client.rpc("mark_latest_visit_paid", {
+          p_property_number: Number(token)
+        });
+        if (error) {
+          requestError = error;
+          break;
+        }
+        if (!data || !["marked", "not_found", "property_archived", "no_visit", "already_paid"].includes(data.status)) {
+          requestError = new Error("Supabase devolvió una respuesta inesperada al procesar el pago.");
+          break;
+        }
+
+        if (data.status === "marked") {
+          processed.push({ propertyNumber: token, status: "marked" });
+          continue;
+        }
+
+        const issue = paymentIssue(token, data.status, data);
+        if (!window.confirm(`${issue}\n\n¿Querés continuar con los demás predios?`)) {
+          stoppedAt = token;
+          break;
+        }
+        processed.push({ propertyNumber: token, status: "skipped" });
+      }
+
+      await loadData();
+    } catch (error) {
+      requestError = error;
+    } finally {
+      setBusy(false);
+    }
+
+    const markedCount = processed.filter((item) => item.status === "marked").length;
+    if (requestError) {
+      showNotice(`Se marcaron ${markedCount} visita(s) antes del error. ${humanError(requestError)}`, true);
+      return;
+    }
+    if (markedCount) byId("payment-property-list").value = "";
+
+    const stopMessage = stoppedAt
+      ? ` Proceso detenido en ${stoppedAt}; los pagos anteriores no se revierten.`
+      : "";
+    showNotice(`Proceso finalizado: ${markedCount} visita(s) marcada(s) como abonadas.${stopMessage}`);
+  }
+
+  async function correctPayment(visitId) {
+    if (!isAdmin() || state.busy) return;
+    const visit = state.visits.find((item) => item.id === visitId);
+    if (!visit?.paid_at) return;
+    if (!window.confirm(`¿Querés quitar la marca de pago del predio ${visit.property_number}? Esta corrección quedará registrada en la auditoría.`)) {
+      return;
+    }
+
+    setBusy(true);
+    clearNotice();
+    try {
+      const { error } = await state.client.from("visits")
+        .update({ paid_at: null })
+        .eq("id", visitId)
+        .select("id")
+        .single();
+      if (error) throw error;
+      await loadData();
+      showNotice(`Se corrigió el pago del predio ${visit.property_number}.`);
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function bindEvents() {
@@ -578,6 +738,7 @@
     });
 
     byId("visit-form").addEventListener("submit", saveVisit);
+    byId("payments-form").addEventListener("submit", processPayments);
     byId("sign-out").addEventListener("click", async () => {
       setBusy(true);
       try {
@@ -612,6 +773,10 @@
       if (!button) return;
       if (button.dataset.action === "edit") beginEdit(button.dataset.id);
       else toggleArchive(button);
+    });
+    byId("payments-list").addEventListener("click", (event) => {
+      const button = event.target.closest('button[data-action="correct-payment"]');
+      if (button) correctPayment(button.dataset.id);
     });
     byId("export-filtered").addEventListener("click", () => exportCsv(filteredVisits(), "filtrados"));
     byId("export-all").addEventListener("click", () => exportCsv(filteredVisits(true), "todos-activos"));

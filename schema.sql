@@ -76,6 +76,8 @@ create table if not exists public.visits (
     cellphone varchar(10) not null
         check (cellphone ~ '^[1-9][0-9]{9}$'),
     notes varchar(250),
+    paid_at timestamptz,
+    paid_by uuid references auth.users (id),
     created_by uuid not null,
     created_at timestamptz not null default now(),
     updated_by uuid not null,
@@ -84,6 +86,11 @@ create table if not exists public.visits (
     archived_by uuid,
     unique (property_number, visit_date)
 );
+
+alter table public.visits
+    add column if not exists paid_at timestamptz;
+alter table public.visits
+    add column if not exists paid_by uuid references auth.users (id);
 
 create table if not exists public.audit_log (
     id bigint generated always as identity primary key,
@@ -207,6 +214,42 @@ begin
 end;
 $$;
 
+create or replace function public.guard_visit_payment()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    if tg_op = 'INSERT' then
+        if (new.paid_at is not null or new.paid_by is not null)
+           and not public.is_admin() then
+            raise exception 'Only an admin can mark a visit as paid';
+        end if;
+        if new.paid_at is null then
+            new.paid_by := null;
+        else
+            new.paid_by := auth.uid();
+        end if;
+        return new;
+    end if;
+
+    if new.paid_at is distinct from old.paid_at
+       or new.paid_by is distinct from old.paid_by then
+        if not public.is_admin() then
+            raise exception 'Only an admin can mark or correct a payment';
+        end if;
+        if new.paid_at is null then
+            new.paid_by := null;
+        else
+            new.paid_by := auth.uid();
+        end if;
+    end if;
+
+    return new;
+end;
+$$;
+
 drop trigger if exists properties_set_metadata on public.properties;
 create trigger properties_set_metadata
 before insert or update on public.properties
@@ -216,6 +259,11 @@ drop trigger if exists visits_set_metadata on public.visits;
 create trigger visits_set_metadata
 before insert or update on public.visits
 for each row execute function public.set_record_metadata();
+
+drop trigger if exists visits_guard_payment on public.visits;
+create trigger visits_guard_payment
+before insert or update on public.visits
+for each row execute function public.guard_visit_payment();
 
 drop trigger if exists properties_audit_changes on public.properties;
 create trigger properties_audit_changes
@@ -241,6 +289,7 @@ set search_path = ''
 as $$
 declare
     new_visit_id uuid;
+    property_archived_at timestamptz;
 begin
     if auth.uid() is null then
         raise exception 'An authenticated user is required';
@@ -250,12 +299,16 @@ begin
     values (p_property_number, auth.uid(), auth.uid())
     on conflict (property_number) do nothing;
 
-    if exists (
-        select 1
-        from public.properties
-        where property_number = p_property_number
-          and archived_at is not null
-    ) then
+    select archived_at
+    into property_archived_at
+    from public.properties
+    where property_number = p_property_number
+    for update;
+
+    if not found then
+        raise exception 'Property could not be created';
+    end if;
+    if property_archived_at is not null then
         raise exception 'This property is archived';
     end if;
 
@@ -280,6 +333,68 @@ begin
     returning id into new_visit_id;
 
     return new_visit_id;
+end;
+$$;
+
+create or replace function public.mark_latest_visit_paid(p_property_number integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    property_archived_at timestamptz;
+    target_visit record;
+    payment_time timestamptz;
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can mark visits as paid';
+    end if;
+
+    select archived_at
+    into property_archived_at
+    from public.properties
+    where property_number = p_property_number
+    for update;
+
+    if not found then
+        return jsonb_build_object('status', 'not_found');
+    end if;
+    if property_archived_at is not null then
+        return jsonb_build_object('status', 'property_archived');
+    end if;
+
+    select id, visit_date, paid_at
+    into target_visit
+    from public.visits
+    where property_number = p_property_number
+      and archived_at is null
+    order by visit_date desc, created_at desc
+    limit 1
+    for update;
+
+    if not found then
+        return jsonb_build_object('status', 'no_visit');
+    end if;
+    if target_visit.paid_at is not null then
+        return jsonb_build_object(
+            'status', 'already_paid',
+            'visit_date', target_visit.visit_date,
+            'paid_at', target_visit.paid_at
+        );
+    end if;
+
+    update public.visits
+    set paid_at = now()
+    where id = target_visit.id
+    returning paid_at into payment_time;
+
+    return jsonb_build_object(
+        'status', 'marked',
+        'visit_id', target_visit.id,
+        'visit_date', target_visit.visit_date,
+        'paid_at', payment_time
+    );
 end;
 $$;
 
@@ -369,4 +484,9 @@ grant execute on function public.is_admin() to authenticated;
 revoke all on function public.create_visit(integer, date, text, text, text)
     from public, anon;
 grant execute on function public.create_visit(integer, date, text, text, text)
+    to authenticated;
+
+revoke all on function public.mark_latest_visit_paid(integer)
+    from public, anon;
+grant execute on function public.mark_latest_visit_paid(integer)
     to authenticated;
