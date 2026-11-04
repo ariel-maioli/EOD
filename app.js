@@ -345,18 +345,51 @@
     const oldData = entry.old_data || {};
     const newData = entry.new_data || {};
     const ignored = new Set(["updated_by", "updated_at"]);
+    const labels = {
+      paid_at: "Fecha de pago",
+      paid_by: "Procesado por",
+      notes: "Notas",
+      contact_name: "Contacto",
+      cellphone: "Celular",
+      visit_date: "Fecha de visita",
+      archived_at: "Archivado",
+      archived_by: "Archivado por"
+    };
     const keys = [...new Set([...Object.keys(oldData), ...Object.keys(newData)])]
       .filter((key) => !ignored.has(key) && JSON.stringify(oldData[key]) !== JSON.stringify(newData[key]));
     if (!keys.length) return "Se actualizó el registro.";
     return keys.map((key) => {
-      const oldValue = oldData[key] ?? "—";
-      const newValue = newData[key] ?? "—";
-      return `${key}: ${oldValue} → ${newValue}`;
+      const formatValue = (value) => {
+        if (value == null) return "—";
+        if (key.endsWith("_by")) return profileName(value);
+        if (key === "paid_at" || key.endsWith("_at")) return formatDateTime(value);
+        if (key === "visit_date") return formatDate(value);
+        return String(value);
+      };
+      return `${labels[key] || key}: ${formatValue(oldData[key])} → ${formatValue(newData[key])}`;
     }).join(" · ");
+  }
+
+  function activityEntityLabel(entry) {
+    const oldData = entry.old_data || {};
+    const newData = entry.new_data || {};
+    const visit = entry.entity_type === "visit"
+      ? state.visits.find((item) => item.id === entry.entity_id)
+      : null;
+    const propertyNumber = newData.property_number ?? oldData.property_number ?? visit?.property_number;
+    if (entry.entity_type === "property") return `Predio ${propertyNumber ?? entry.entity_id}`;
+    if (propertyNumber == null) return "Visita";
+    const visitDate = newData.visit_date ?? oldData.visit_date ?? visit?.visit_date;
+    return `Visita del predio ${propertyNumber}${visitDate ? ` · ${formatDate(visitDate)}` : ""}`;
   }
 
   function renderActivity() {
     const container = byId("activity-list");
+    const actionLabels = {
+      INSERT: "Creación",
+      UPDATE: "Actualización",
+      DELETE: "Eliminación"
+    };
     if (!isAdmin()) {
       container.innerHTML = "";
       return;
@@ -369,10 +402,10 @@
       <article class="activity-entry">
         <div class="activity-top">
           <strong>${escapeHtml(profileName(entry.actor_id))}</strong>
-          <span class="state-label">${escapeHtml(entry.action)}</span>
+          <span class="state-label">${escapeHtml(actionLabels[entry.action] || entry.action)}</span>
           <span class="result-meta">${escapeHtml(formatDateTime(entry.changed_at))}</span>
         </div>
-        <p>${escapeHtml(entry.entity_type === "property" ? "Predio" : "Visita")} · ${escapeHtml(entry.entity_id)}</p>
+        <p>${escapeHtml(activityEntityLabel(entry))}</p>
         <p class="activity-change">${escapeHtml(changedFields(entry))}</p>
       </article>
     `).join("");
