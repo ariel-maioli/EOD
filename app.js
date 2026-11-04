@@ -431,8 +431,8 @@
     byId("payments-form").hidden = !isAdmin();
     byId("filter-user-field").hidden = !isAdmin();
     byId("filter-status-field").hidden = !isAdmin();
-    byId("payments-intro").textContent = isAdmin()
-      ? "Ingresá predios separados por coma. Se marcará la visita activa más reciente de cada uno; solo el administrador puede registrar pagos."
+    byId("payments-info").textContent = isAdmin()
+      ? "Ingresar números de predio separados por coma. Se marcará la visita activa más reciente de cada uno."
       : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
     byId("filter-status").value = "active";
     byId("visit-date").value = localDateInputValue();
