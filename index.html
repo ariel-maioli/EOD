@@ -165,8 +165,13 @@
       <section id="activity-view" class="view-panel" hidden>
         <div class="card">
           <div class="eyebrow">Administración</div>
-          <h2>Actividad reciente</h2>
-          <p class="muted">Cambios realizados durante los últimos 30 días. El historial completo se conserva en la base de datos.</p>
+          <div class="activity-heading">
+            <h2>Actividad reciente</h2>
+            <span class="info-tooltip" tabindex="0" aria-label="Información sobre actividad reciente" aria-describedby="activity-info">
+              <span aria-hidden="true">i</span>
+              <span id="activity-info" class="info-tooltip-text" role="tooltip">Cambios realizados durante los últimos 30 días. El historial completo se conserva en la base de datos.</span>
+            </span>
+          </div>
           <div id="activity-list" class="activity-list"></div>
         </div>
       </section>
