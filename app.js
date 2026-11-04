@@ -258,12 +258,22 @@
 
     container.innerHTML = results.map((visit) => {
       if (!isAdmin()) {
+        const phone = String(visit.cellphone).replace(/\D/g, "");
+        const whatsappUrl = `https://wa.me/549${phone}`;
         return `
           <article class="search-result-row">
             <strong>${escapeHtml(visit.property_number)}</strong>
             <span>${escapeHtml(formatDate(visit.visit_date))}</span>
             <span>${escapeHtml(visit.contact_name)}</span>
-            <span>${escapeHtml(visit.cellphone)}</span>
+            <div class="search-contact">
+              <span>${escapeHtml(visit.cellphone)}</span>
+              <a class="contact-action whatsapp-action" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Abrir chat de WhatsApp con ${escapeHtml(visit.cellphone)}" title="Abrir WhatsApp">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.5 0 .1 5.4.1 12c0 2.1.6 4.2 1.6 6L0 24l6.2-1.6a12 12 0 0 0 5.9 1.5h.1c6.6 0 12-5.4 12-12a11.8 11.8 0 0 0-3.7-8.4Zm-8.4 18.4c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.3-.4A9.8 9.8 0 1 1 12.1 22Zm5.4-7.3c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1a8.3 8.3 0 0 1-2.5-1.5 9.4 9.4 0 0 1-1.7-2.1c-.2-.3 0-.5.1-.6l.5-.6.3-.5c.1-.2 0-.4 0-.6l-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.2 1.4 3.4c.2.2 2.4 3.7 5.8 5.1.8.3 1.4.5 1.9.6.8.2 1.5.2 2 .1.6-.1 1.8-.8 2-1.5.3-.7.3-1.3.2-1.5 0-.2-.3-.3-.6-.5Z"/></svg>
+              </a>
+              <button class="contact-action copy-action" type="button" data-action="copy-phone" data-phone="${escapeHtml(visit.cellphone)}" aria-label="Copiar celular ${escapeHtml(visit.cellphone)}" title="Copiar celular">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>
+              </button>
+            </div>
           </article>`;
       }
 
@@ -688,6 +698,18 @@
     }
   }
 
+  async function copyPhone(phone) {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("El navegador no permite copiar al portapapeles desde esta página.");
+      }
+      await navigator.clipboard.writeText(phone);
+      showNotice(`Se copió el celular ${phone}.`);
+    } catch (error) {
+      showNotice(error.message || "No se pudo copiar el celular.", true);
+    }
+  }
+
   function bindEvents() {
     byId("login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -802,10 +824,11 @@
     });
     byId("cancel-edit").addEventListener("click", resetVisitForm);
     byId("visit-results").addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-action]");
-      if (!button) return;
-      if (button.dataset.action === "edit") beginEdit(button.dataset.id);
-      else toggleArchive(button);
+      const actionElement = event.target.closest("[data-action]");
+      if (!actionElement) return;
+      if (actionElement.dataset.action === "copy-phone") copyPhone(actionElement.dataset.phone);
+      else if (actionElement.dataset.action === "edit") beginEdit(actionElement.dataset.id);
+      else if (actionElement instanceof HTMLButtonElement) toggleArchive(actionElement);
     });
     byId("payments-list").addEventListener("click", (event) => {
       const button = event.target.closest('button[data-action="correct-payment"]');

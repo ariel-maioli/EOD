@@ -55,7 +55,7 @@ En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, e
 
 - Inicio de sesión por correo y contraseña. El administrador gestiona cuentas y restablece claves desde Supabase.
 - Alta de visitas y edición de visitas activas.
-- Búsqueda por número de predio, nombre o celular. Los técnicos solo ven predios activos y datos básicos de la visita, con filtros por fecha; el administrador conserva los filtros por técnico y estado y el acceso a visitas archivadas.
+- Búsqueda por número de predio, nombre o celular. Los técnicos solo ven predios activos y datos básicos de la visita, con filtros por fecha; disponen de botones para abrir WhatsApp sin mensaje predefinido y copiar el celular. El administrador conserva los filtros por técnico y estado y el acceso a visitas archivadas.
 - Archivo y restauración de visitas/predios, solo para el administrador.
 - Estado de pago y fecha en las visitas; el administrador puede marcar/corregir pagos desde la sección Pagos.
 - Actividad de auditoría de los últimos 30 días en la pantalla del administrador. La base conserva el historial sin purgarlo automáticamente.

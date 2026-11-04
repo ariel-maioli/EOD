@@ -97,6 +97,12 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .payment-row > span { color: var(--muted); font-size: .9rem; }
 .search-result-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
 .search-result-row > span { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.search-contact { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.search-contact > span { color: var(--muted); font-size: .9rem; }
+.contact-action { display: inline-flex; width: 30px; height: 30px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid #b7cbd2; border-radius: 7px; background: white; color: var(--primary-dark); text-decoration: none; cursor: pointer; }
+.contact-action svg { width: 16px; height: 16px; fill: currentColor; }
+.whatsapp-action { border-color: #b7dfc2; background: #eaf7ee; color: #16803c; }
+.contact-action:focus-visible { outline: 3px solid rgb(14 100 117 / 20%); outline-offset: 2px; }
 .field input:disabled { background: #edf2f4; color: var(--muted); }
 .field small { font-size: .78rem; font-weight: 400; }
 .field-full { grid-column: 1 / -1; }
@@ -153,4 +159,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   .payment-row { gap: 8px; padding: 8px; font-size: .9rem; }
   .payment-row .button { padding-inline: 8px; }
   .search-result-row { grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 8px; font-size: .9rem; }
+  .search-contact { gap: 4px; }
+  .search-contact > span { font-size: .8rem; }
+  .contact-action { width: 27px; height: 27px; }
 }
