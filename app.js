@@ -752,9 +752,14 @@
     });
 
     document.querySelectorAll(".tab-button").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         clearNotice();
         setView(button.dataset.view);
+        try {
+          await loadData();
+        } catch (error) {
+          showNotice(`No se pudieron actualizar los datos de esta sección. ${humanError(error)}`, true);
+        }
       });
     });
 
