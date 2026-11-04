@@ -149,16 +149,29 @@
   }
 
   async function loadData() {
-    const [visitsResult, propertiesResult, profilesResult] = await Promise.all([
-      state.client.from("visits").select("*").order("visit_date", { ascending: false }),
+    const [visitsResult, paymentsResult, propertiesResult, profilesResult] = await Promise.all([
+      state.client.from("visits")
+        .select("id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by")
+        .order("visit_date", { ascending: false }),
+      state.client.rpc("get_visible_visit_payments"),
       state.client.from("properties").select("*"),
       state.client.from("profiles").select("id,email,display_name,role")
     ]);
 
-    const failure = [visitsResult, propertiesResult, profilesResult].find((result) => result.error);
+    const failure = [visitsResult, paymentsResult, propertiesResult, profilesResult].find((result) => result.error);
     if (failure) throw failure.error;
 
-    state.visits = visitsResult.data || [];
+    const paymentDetails = new Map(
+      (paymentsResult.data || []).map((payment) => [payment.visit_id, payment])
+    );
+    state.visits = (visitsResult.data || []).map((visit) => {
+      const payment = paymentDetails.get(visit.id);
+      return {
+        ...visit,
+        paid_at: payment?.paid_at || null,
+        paid_by: payment?.paid_by || null
+      };
+    });
     state.properties = propertiesResult.data || [];
     state.profiles = profilesResult.data || [];
 
@@ -202,13 +215,14 @@
     const queryDigits = query.replace(/\D/g, "");
     const from = byId("filter-from").value;
     const to = byId("filter-to").value;
-    const userId = byId("filter-user").value;
-    const status = activeOnly ? "active" : byId("filter-status").value;
+    const userId = isAdmin() ? byId("filter-user").value : "";
+    const status = activeOnly || !isAdmin() ? "active" : byId("filter-status").value;
 
     return state.visits.filter((visit) => {
       const property = propertyFor(visit.property_number);
       const parentArchived = Boolean(property?.archived_at);
       const isArchived = Boolean(visit.archived_at || parentArchived);
+      if (!isAdmin() && (!property || isArchived)) return false;
       if (status === "active" && isArchived) return false;
       if (status === "archived" && !isArchived) return false;
       if (status === "all" && !isAdmin() && isArchived) return false;
@@ -243,6 +257,16 @@
     }
 
     container.innerHTML = results.map((visit) => {
+      if (!isAdmin()) {
+        return `
+          <article class="search-result-row">
+            <strong>${escapeHtml(visit.property_number)}</strong>
+            <span>${escapeHtml(formatDate(visit.visit_date))}</span>
+            <span>${escapeHtml(visit.contact_name)}</span>
+            <span>${escapeHtml(visit.cellphone)}</span>
+          </article>`;
+      }
+
       const property = propertyFor(visit.property_number);
       const archived = Boolean(visit.archived_at || property?.archived_at);
       const parentArchived = Boolean(property?.archived_at);
@@ -257,9 +281,12 @@
       const editButton = canEdit
         ? `<button class="button button-small button-quiet" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}">Editar</button>`
         : "";
-      const paymentStatus = visit.paid_at
-        ? `<p class="result-meta"><span class="state-label">Abonada</span> · ${escapeHtml(formatPaymentDate(visit.paid_at))}</p>`
-        : '<p class="result-meta"><span class="state-label unpaid">Sin abonar</span></p>';
+      const canViewPayment = isAdmin() || visit.created_by === state.user?.id;
+      const paymentStatus = !canViewPayment
+        ? ""
+        : visit.paid_at
+          ? `<p class="result-meta"><span class="state-label">Abonada</span> · ${escapeHtml(formatPaymentDate(visit.paid_at))}</p>`
+          : '<p class="result-meta"><span class="state-label unpaid">Sin abonar</span></p>';
 
       return `
         <article class="result-card">
@@ -279,7 +306,7 @@
 
   function renderPayments() {
     const paidVisits = state.visits
-      .filter((visit) => visit.paid_at)
+      .filter((visit) => visit.paid_at && (isAdmin() || visit.created_by === state.user?.id))
       .sort((a, b) => b.paid_at.localeCompare(a.paid_at));
     const recentPaidVisits = paidVisits.slice(0, 15);
     const container = byId("payments-list");
@@ -294,7 +321,8 @@
 
     container.innerHTML = recentPaidVisits.map((visit) => `
       <article class="payment-row">
-        <strong>Predio ${escapeHtml(visit.property_number)}</strong>
+        <strong>${escapeHtml(visit.property_number)}</strong>
+        <span>${escapeHtml(profileName(visit.created_by))}</span>
         <span>${escapeHtml(formatPaymentDate(visit.paid_at))}</span>
         ${isAdmin() ? `<button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir</button>` : ""}
       </article>
@@ -358,6 +386,8 @@
     byId("activity-tab").hidden = !isAdmin();
     byId("export-actions").hidden = !isAdmin();
     byId("payments-form").hidden = !isAdmin();
+    byId("filter-user-field").hidden = !isAdmin();
+    byId("filter-status-field").hidden = !isAdmin();
     byId("payments-intro").textContent = isAdmin()
       ? "Ingresá predios separados por coma. Se marcará la visita activa más reciente de cada uno; solo el administrador puede registrar pagos."
       : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";

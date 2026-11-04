@@ -93,8 +93,10 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .payments-form small { color: var(--muted); line-height: 1.5; }
 .payments-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 24px; }
 .payments-history-heading h3 { margin: 0 0 12px; font-size: 1rem; }
-.payment-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.payment-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
 .payment-row > span { color: var(--muted); font-size: .9rem; }
+.search-result-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.search-result-row > span { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
 .field input:disabled { background: #edf2f4; color: var(--muted); }
 .field small { font-size: .78rem; font-weight: 400; }
 .field-full { grid-column: 1 / -1; }
@@ -150,4 +152,5 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   .result-actions .button { flex: 1 1 auto; }
   .payment-row { gap: 8px; padding: 8px; font-size: .9rem; }
   .payment-row .button { padding-inline: 8px; }
+  .search-result-row { grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 8px; font-size: .9rem; }
 }

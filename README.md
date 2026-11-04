@@ -39,7 +39,9 @@ Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_edit_perm
 
 ## Pagos
 
-Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_payments.sql`](./visit_payments.sql) en **SQL Editor**. Solo el administrador puede procesar listas de predios separados por coma; se marca la visita activa más reciente y se registra la fecha y quién realizó el proceso. Todos los usuarios autenticados pueden consultar el estado y la fecha de pago. Si un predio no existe, está archivado, no tiene visitas activas o la visita ya está abonada, la app informa el motivo y pregunta si continúa con los siguientes números. Las correcciones del pago están disponibles únicamente para el admin y quedan auditadas.
+Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_payments.sql`](./visit_payments.sql) en **SQL Editor**. Solo el administrador puede procesar listas de predios separados por coma; se marca la visita activa más reciente y se registra la fecha y quién realizó el proceso. Cada técnico puede consultar el estado de pago de sus propias visitas; el administrador puede ver todos los pagos. Si un predio no existe, está archivado, no tiene visitas activas o la visita ya está abonada, la app informa el motivo y pregunta si continúa con los siguientes números. Las correcciones del pago están disponibles únicamente para el admin y quedan auditadas.
+
+Para un proyecto que ya ejecutó `visit_payments.sql`, ejecutá [`payment_visibility.sql`](./payment_visibility.sql) para restringir también el acceso directo a los campos de pago en la API: los técnicos solo reciben los pagos de sus propias visitas y el admin recibe todos.
 
 ## Preparar producción para el inicio
 
@@ -53,7 +55,7 @@ En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, e
 
 - Inicio de sesión por correo y contraseña. El administrador gestiona cuentas y restablece claves desde Supabase.
 - Alta de visitas y edición de visitas activas.
-- Búsqueda por número de predio, nombre o celular; filtros por fechas, técnico y estado.
+- Búsqueda por número de predio, nombre o celular. Los técnicos solo ven predios activos y datos básicos de la visita, con filtros por fecha; el administrador conserva los filtros por técnico y estado y el acceso a visitas archivadas.
 - Archivo y restauración de visitas/predios, solo para el administrador.
 - Estado de pago y fecha en las visitas; el administrador puede marcar/corregir pagos desde la sección Pagos.
 - Actividad de auditoría de los últimos 30 días en la pantalla del administrador. La base conserva el historial sin purgarlo automáticamente.
