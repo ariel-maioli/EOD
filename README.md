@@ -77,6 +77,12 @@ Solo el administrador tiene acceso a esta sección. Muestra los eventos de audit
 
 Revisá el contenido y verificá que estás conectado al proyecto correcto antes de ejecutarlo manualmente en **Supabase → SQL Editor**. Hacé antes un respaldo de los datos que quieras conservar. **No lo ejecutes en un proyecto cuyos datos deban mantenerse.**
 
+## Generar datos de prueba
+
+[`seed_test_visits.sql`](./seed_test_visits.sql) crea 200 visitas y 200 predios para probar la aplicación: 50 visitas por cada uno de cuatro técnicos. El administrador no recibe visitas; su cuenta solo se usa para registrar los pagos. Las visitas se distribuyen aleatoriamente de lunes a viernes, 10 por semana durante cinco semanas desde el 13 de abril de 2026. Las primeras 40 por técnico quedan abonadas en el viernes de su semana y las últimas 10 quedan impagas.
+
+El script contiene los UUID de las cuentas de prueba y verifica que existan con los roles esperados. Solo se puede ejecutar si las tablas `properties` y `visits` están vacías; está destinado al proyecto nuevo de pruebas, no a producción. Ejecutalo manualmente en **Supabase → SQL Editor** después de crear las cuentas y configurar sus roles. La transacción se revierte si falla alguna validación.
+
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí la rama `main` y la carpeta `/ (root)`, y guardá. GitHub Pages publica los archivos del repositorio; el acceso a los datos de la aplicación requiere iniciar sesión. Después de cambiar los archivos, publicá los cambios en el repositorio para que aparezcan en el sitio.
