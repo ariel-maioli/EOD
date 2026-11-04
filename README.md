@@ -43,7 +43,7 @@ Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_payments.
 
 ## Preparar producción para el inicio
 
-Cuando estés listo para eliminar las visitas cargadas hasta el momento, revisá [`clear_production_visits.sql`](./clear_production_visits.sql) y ejecutalo manualmente en **Supabase → SQL Editor**. Es una operación destructiva: borra todas las filas de `visits` y sus eventos de auditoría; conserva predios, perfiles/usuarios y eventos de auditoría de predios. La transacción bloquea temporalmente la tabla y revierte todo si ocurre un error. No lo ejecutes en un proyecto de pruebas que quieras conservar.
+Cuando estés listo para eliminar los datos de la aplicación, revisá [`clear_production_visits.sql`](./clear_production_visits.sql) y ejecutalo manualmente en **Supabase → SQL Editor**. Es una operación destructiva: borra todas las visitas, todos los predios y todo el historial de auditoría; conserva los usuarios de Supabase y sus perfiles. La transacción bloquea temporalmente las tablas y revierte todo si ocurre un error. No lo ejecutes en un proyecto que quieras conservar sin antes verificar que sea el proyecto correcto y respaldar los datos necesarios.
 
 ## Publicar con GitHub Pages
 
