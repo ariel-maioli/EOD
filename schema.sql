@@ -1,5 +1,8 @@
 -- EOD database schema for Supabase.
--- Run this file in the Supabase SQL Editor before connecting the web app.
+-- Complete EOD schema: includes profile names, visit permissions, payments,
+-- payment visibility restrictions, audit logging, and future-date validation.
+-- Run the full file in the Supabase SQL Editor for a new or existing EOD project.
+-- This file creates/updates schema objects and policies; it does not delete application data.
 -- Create/invite users in Supabase Auth, then promote the first admin:
 -- UPDATE public.profiles SET role = 'admin' WHERE lower(email) = lower('admin@example.com');
 
