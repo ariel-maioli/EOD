@@ -37,6 +37,8 @@ Para un proyecto que ya ejecutó el esquema inicial, ejecutá [`profile_display_
 
 Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_edit_permissions.sql`](./visit_edit_permissions.sql) en **SQL Editor**. Desde entonces, cada técnico puede editar solo sus visitas activas; el administrador conserva permiso para editar cualquier visita. La regla se valida tanto en la interfaz como en las políticas de la base de datos.
 
+Las fechas futuras no se permiten en altas ni ediciones. En un proyecto ya creado, ejecutá [`visit_date_no_future.sql`](./visit_date_no_future.sql) en **SQL Editor** para aplicar también esta validación en la base de datos.
+
 ## Pagos
 
 Para un proyecto que ya ejecutó el esquema anterior, ejecutá [`visit_payments.sql`](./visit_payments.sql) en **SQL Editor**. Solo el administrador puede procesar listas de predios separados por coma; se marca la visita activa más reciente y se registra la fecha y quién realizó el proceso. Cada técnico puede consultar el estado de pago de sus propias visitas; el administrador puede ver todos los pagos. Si un predio no existe, está archivado, no tiene visitas activas o la visita ya está abonada, la app informa el motivo y pregunta si continúa con los siguientes números. Las correcciones del pago están disponibles únicamente para el admin y quedan auditadas.
@@ -61,4 +63,4 @@ En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, e
 - Actividad de auditoría de los últimos 30 días en la pantalla del administrador. La base conserva el historial sin purgarlo automáticamente.
 - Exportación CSV para el administrador: resultados filtrados o todos los registros activos.
 
-La aplicación aplica el límite de una visita por predio y fecha y valida los campos también en la base de datos. Para mantener la configuración actualizada, volvé a publicar cualquier cambio en estos archivos.
+La aplicación aplica el límite de una visita por predio y fecha, impide fechas futuras y valida los campos también en la base de datos. Para mantener la configuración actualizada, volvé a publicar cualquier cambio en estos archivos.

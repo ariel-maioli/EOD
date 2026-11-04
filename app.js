@@ -90,6 +90,10 @@
     return local.toISOString().slice(0, 10);
   }
 
+  function setVisitDateLimit() {
+    byId("visit-date").max = localDateInputValue();
+  }
+
   function formatDate(value) {
     if (!value) return "Sin fecha";
     const [year, month, day] = value.slice(0, 10).split("-");
@@ -474,6 +478,7 @@
       ? "Ingresar números de predio separados por coma. Se marcará la visita activa más reciente de cada uno."
       : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
     byId("filter-status").value = "active";
+    setVisitDateLimit();
     byId("visit-date").value = localDateInputValue();
     setView(isAdmin() ? "activity-view" : "form-view");
     await loadData();
@@ -482,6 +487,7 @@
 
   function resetVisitForm() {
     byId("visit-form").reset();
+    setVisitDateLimit();
     byId("visit-date").value = localDateInputValue();
     byId("property-number").disabled = false;
     byId("visit-form-title").textContent = "Registrar una visita";
@@ -524,6 +530,7 @@
     if (state.busy) return;
     clearNotice();
     const form = event.currentTarget;
+    setVisitDateLimit();
     if (!form.reportValidity()) return;
 
     const payload = {
@@ -577,6 +584,9 @@
     }
     if (message.includes("contact_name_check") || message.includes("visits_contact_name_check")) {
       return "El nombre de contacto es obligatorio y admite hasta 50 caracteres.";
+    }
+    if (message.includes("Visit date cannot be in the future")) {
+      return "La fecha de visita no puede ser futura.";
     }
     if (message.includes("This property is archived")) {
       return "El predio está archivado. Pedile al administrador que lo restaure antes de cargar una visita.";
@@ -901,6 +911,7 @@
     byId("notes").addEventListener("input", (event) => {
       byId("notes-count").textContent = String(event.target.value.length);
     });
+    byId("visit-date").addEventListener("focus", setVisitDateLimit);
     byId("property-number").addEventListener("input", hideVisitSuccess);
     byId("cancel-edit").addEventListener("click", resetVisitForm);
     byId("visit-results").addEventListener("click", (event) => {
