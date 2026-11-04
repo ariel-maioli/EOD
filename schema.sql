@@ -1,6 +1,7 @@
 -- EOD database schema for Supabase.
 -- Complete EOD schema: includes profile names, visit permissions, payments,
--- payment visibility restrictions, audit logging, and future-date validation.
+-- payment visibility restrictions, audit logging, future-date validation,
+-- and maintenance-mode access controls.
 -- Run the full file in the Supabase SQL Editor for a new or existing EOD project.
 -- This file creates/updates schema objects and policies; it does not delete application data.
 -- Create/invite users in Supabase Auth, then promote the first admin:
@@ -17,6 +18,16 @@ create table if not exists public.profiles (
 
 alter table public.profiles
     add column if not exists display_name text;
+
+create table if not exists public.maintenance_settings (
+    id boolean primary key default true check (id),
+    enabled boolean not null default false,
+    updated_at timestamptz not null default now()
+);
+
+insert into public.maintenance_settings (id, enabled)
+values (true, false)
+on conflict (id) do nothing;
 
 create or replace function public.sync_auth_profile()
 returns trigger
@@ -56,6 +67,29 @@ as $$
         where id = auth.uid()
           and role = 'admin'
     );
+$$;
+
+create or replace function public.get_maintenance_status()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select coalesce(
+        (select enabled from public.maintenance_settings where id is true),
+        true
+    );
+$$;
+
+create or replace function public.application_access_allowed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select not public.get_maintenance_status() or public.is_admin();
 $$;
 
 create table if not exists public.properties (
@@ -315,6 +349,9 @@ begin
     if auth.uid() is null then
         raise exception 'An authenticated user is required';
     end if;
+    if not public.application_access_allowed() then
+        raise exception 'The application is in maintenance mode';
+    end if;
 
     insert into public.properties (property_number, created_by, updated_by)
     values (p_property_number, auth.uid(), auth.uid())
@@ -433,6 +470,7 @@ as $$
     select visit.id, visit.paid_at, visit.paid_by
     from public.visits as visit
     where auth.uid() is not null
+      and public.application_access_allowed()
       and visit.paid_at is not null
       and (
           public.is_admin()
@@ -450,19 +488,24 @@ as $$
 $$;
 
 alter table public.profiles enable row level security;
+alter table public.maintenance_settings enable row level security;
 alter table public.properties enable row level security;
 alter table public.visits enable row level security;
 alter table public.audit_log enable row level security;
 
 drop policy if exists "profiles_select_self_or_admin" on public.profiles;
+drop policy if exists "profiles_select_authenticated" on public.profiles;
 create policy "profiles_select_authenticated"
 on public.profiles for select to authenticated
-using (auth.uid() is not null);
+using (auth.uid() is not null and public.application_access_allowed());
 
 drop policy if exists "properties_select_active_or_admin" on public.properties;
 create policy "properties_select_active_or_admin"
 on public.properties for select to authenticated
-using (archived_at is null or public.is_admin());
+using (
+    public.application_access_allowed()
+    and (archived_at is null or public.is_admin())
+);
 
 drop policy if exists "properties_update_admin" on public.properties;
 create policy "properties_update_admin"
@@ -474,14 +517,17 @@ drop policy if exists "visits_select_active_or_admin" on public.visits;
 create policy "visits_select_active_or_admin"
 on public.visits for select to authenticated
 using (
-    public.is_admin()
-    or (
-        archived_at is null
-        and exists (
-            select 1
-            from public.properties
-            where property_number = visits.property_number
-              and archived_at is null
+    public.application_access_allowed()
+    and (
+        public.is_admin()
+        or (
+            archived_at is null
+            and exists (
+                select 1
+                from public.properties
+                where property_number = visits.property_number
+                  and archived_at is null
+            )
         )
     )
 );
@@ -490,30 +536,34 @@ drop policy if exists "visits_update_active_or_admin" on public.visits;
 create policy "visits_update_active_or_admin"
 on public.visits for update to authenticated
 using (
-    public.is_admin()
-    or (
-        created_by = auth.uid()
-        and
-        archived_at is null
-        and exists (
-            select 1
-            from public.properties
-            where property_number = visits.property_number
-              and archived_at is null
+    public.application_access_allowed()
+    and (
+        public.is_admin()
+        or (
+            created_by = auth.uid()
+            and archived_at is null
+            and exists (
+                select 1
+                from public.properties
+                where property_number = visits.property_number
+                  and archived_at is null
+            )
         )
     )
 )
 with check (
-    public.is_admin()
-    or (
-        created_by = auth.uid()
-        and
-        archived_at is null
-        and exists (
-            select 1
-            from public.properties
-            where property_number = visits.property_number
-              and archived_at is null
+    public.application_access_allowed()
+    and (
+        public.is_admin()
+        or (
+            created_by = auth.uid()
+            and archived_at is null
+            and exists (
+                select 1
+                from public.properties
+                where property_number = visits.property_number
+                  and archived_at is null
+            )
         )
     )
 );
@@ -525,6 +575,7 @@ using (public.is_admin());
 
 revoke all on public.profiles, public.properties, public.visits, public.audit_log
     from public, anon, authenticated;
+revoke all on public.maintenance_settings from public, anon, authenticated;
 grant select on public.profiles, public.properties, public.audit_log
     to authenticated;
 revoke select (paid_at, paid_by) on public.visits
@@ -547,6 +598,12 @@ grant update on public.properties, public.visits to authenticated;
 
 revoke all on function public.is_admin() from public, anon;
 grant execute on function public.is_admin() to authenticated;
+
+revoke all on function public.get_maintenance_status() from public;
+grant execute on function public.get_maintenance_status() to anon, authenticated;
+
+revoke all on function public.application_access_allowed() from public, anon;
+grant execute on function public.application_access_allowed() to authenticated;
 
 revoke all on function public.create_visit(integer, date, text, text, text)
     from public, anon;

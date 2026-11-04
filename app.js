@@ -15,6 +15,7 @@
     audit: [],
     editingId: null,
     recoveryMode: false,
+    maintenanceEnabled: false,
     busy: false,
     noticeTimer: null,
     visitSuccessTimer: null,
@@ -167,6 +168,76 @@
 
   function isAdmin() {
     return state.profile?.role === "admin";
+  }
+
+  async function closeSessionForMaintenance() {
+    let signOutError = null;
+    try {
+      const { error } = await state.client.auth.signOut();
+      signOutError = error;
+    } catch (error) {
+      signOutError = error;
+    }
+    showLoggedOut();
+    if (signOutError) {
+      showNotice(
+        `Modo de mantenimiento activo, pero no se pudo cerrar completamente la sesión: ${humanError(signOutError)}`,
+        true
+      );
+      return false;
+    }
+    showNotice("Modo de mantenimiento activo. Se cerró tu sesión.");
+    return true;
+  }
+
+  async function refreshMaintenanceStatus() {
+    const { data, error } = await state.client.rpc("get_maintenance_status");
+    if (error) throw error;
+    if (typeof data !== "boolean") {
+      throw new Error("Supabase devolvió un estado de mantenimiento inválido.");
+    }
+
+    state.maintenanceEnabled = data;
+    byId("maintenance-banner").hidden = !data;
+    if (data && state.user && state.profile && !isAdmin()) {
+      await closeSessionForMaintenance();
+    }
+    return data;
+  }
+
+  async function handleMaintenanceCheckFailure(error) {
+    const shouldCloseSession = Boolean(state.user && !isAdmin());
+    if (shouldCloseSession) {
+      let signOutError = null;
+      try {
+        const { error: authError } = await state.client.auth.signOut();
+        signOutError = authError;
+      } catch (authError) {
+        signOutError = authError;
+      }
+      showLoggedOut();
+      if (signOutError) {
+        showNotice(
+          `No se pudo verificar el modo de mantenimiento (${humanError(error)}) ni cerrar la sesión (${humanError(signOutError)}).`,
+          true
+        );
+        return;
+      }
+    }
+    showNotice(
+      `No se pudo verificar el modo de mantenimiento. ${humanError(error)}${shouldCloseSession ? " Se cerró la sesión por seguridad." : ""}`,
+      true
+    );
+  }
+
+  function startMaintenanceChecks() {
+    const check = () => refreshMaintenanceStatus().catch(handleMaintenanceCheckFailure);
+    window.setInterval(() => {
+      if (document.visibilityState === "visible") check();
+    }, 15000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") check();
+    });
   }
 
   function setView(viewId) {
@@ -627,14 +698,26 @@
   }
 
   async function openApplication(user) {
+    await refreshMaintenanceStatus();
     state.user = user;
     const { data, error } = await state.client
       .from("profiles")
       .select("id,email,display_name,role")
       .eq("id", user.id)
       .single();
-    if (error) throw error;
+    if (error) {
+      await refreshMaintenanceStatus();
+      if (state.maintenanceEnabled) {
+        await closeSessionForMaintenance();
+        return false;
+      }
+      throw error;
+    }
     state.profile = data;
+    if (state.maintenanceEnabled && !isAdmin()) {
+      await closeSessionForMaintenance();
+      return false;
+    }
     byId("login-panel").hidden = true;
     byId("application").hidden = false;
     byId("session-area").hidden = false;
@@ -655,6 +738,7 @@
     setView(isAdmin() ? "activity-view" : "form-view");
     await loadData();
     if (!isAdmin()) focusPropertyNumber();
+    return true;
   }
 
   function resetVisitForm() {
@@ -1125,6 +1209,9 @@
     if (recoveryLink) showRecoveryPanel();
     else byId("login-panel").hidden = false;
 
+    startMaintenanceChecks();
+    await refreshMaintenanceStatus();
+
     state.client.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") showRecoveryPanel();
       if (event === "SIGNED_OUT") showLoggedOut();
@@ -1148,15 +1235,19 @@
       try {
         await openApplication(data.session.user);
       } catch (loadError) {
-        await state.client.auth.signOut();
+        const { error: signOutError } = await state.client.auth.signOut();
         showLoggedOut();
-        showNotice(humanError(loadError), true);
+        showNotice(
+          signOutError
+            ? `${humanError(loadError)} No se pudo cerrar la sesión: ${humanError(signOutError)}`
+            : humanError(loadError),
+          true
+        );
       }
     }
   }
 
   start().catch((error) => {
-    byId("setup-panel").hidden = false;
     showNotice(humanError(error), true);
   });
 })();

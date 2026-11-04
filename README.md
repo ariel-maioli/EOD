@@ -42,6 +42,26 @@ No necesitás ejecutar scripts de migración separados: `schema.sql` es la fuent
 - Los datos se vuelven a cargar al entrar en cada sección. Al actualizar la página, la sesión existente se restaura y se vuelven a cargar los datos.
 - El saludo cambia según la hora de Argentina: «Buenos días» (05:00–11:59), «Buenas tardes» (12:00–19:59) y «Buenas noches» (20:00–04:59).
 
+## Modo de mantenimiento
+
+El modo de mantenimiento se controla desde **Supabase → SQL Editor**. Primero, ejecutá el `schema.sql` actualizado en el proyecto conectado a EOD y publicá esta versión de la aplicación. Antes de iniciar una tarea de mantenimiento o publicar cambios posteriores, activá el modo:
+
+```sql
+UPDATE public.maintenance_settings
+SET enabled = true, updated_at = now()
+WHERE id = true;
+```
+
+Mientras esté activo, solo el administrador puede ingresar; las sesiones de los técnicos se cierran al detectar el cambio (normalmente en un máximo de 15 segundos, o al volver a la pestaña). Las políticas y funciones de Supabase también bloquean el acceso de los técnicos a los datos. Al terminar el mantenimiento y publicar los cambios, desactivalo:
+
+```sql
+UPDATE public.maintenance_settings
+SET enabled = false, updated_at = now()
+WHERE id = true;
+```
+
+Verificá que estés en el proyecto Supabase correcto al ejecutar ambos comandos. Si no se puede consultar el estado, la aplicación impide que los técnicos continúen.
+
 ## Registrar visitas
 
 - El número de predio debe tener seis dígitos, comenzar entre 1 y 9, y no puede estar vacío.

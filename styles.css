@@ -55,6 +55,7 @@ body {
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px; box-shadow: 0 8px 26px rgb(23 43 58 / 4%); }
 .auth-card { width: min(100%, 430px); margin: 8vh auto; }
 .message-card { max-width: 650px; margin: 10vh auto; }
+.maintenance-banner { border-color: #e6c88b; background: #fffaf0; }
 .page-heading, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .page-heading { margin-bottom: 24px; }
 h1, h2, p { margin-top: 0; }
