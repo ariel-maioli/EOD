@@ -46,7 +46,7 @@ No necesitás ejecutar scripts de migración separados: `schema.sql` es la fuent
 
 - El número de predio debe tener seis dígitos, comenzar entre 1 y 9, y no puede estar vacío.
 - La fecha se propone inicialmente como hoy y no se permiten fechas futuras, tampoco al editar.
-- El contacto es obligatorio (hasta 50 caracteres); el celular es obligatorio y debe tener 10 dígitos, sin prefijo `0` ni `15`; las notas son opcionales (hasta 250 caracteres).
+- El contacto es obligatorio (hasta 50 caracteres); el celular es obligatorio y debe tener 10 dígitos, sin prefijo `0` ni `15`; las notas son opcionales (hasta 250 caracteres) y pueden incluir información útil para futuras visitas o auditorías.
 - Solo puede existir una visita por predio y fecha.
 - No se puede registrar una visita mientras el predio esté archivado. El administrador debe restaurar el predio primero.
 - Tras guardar, la confirmación aparece dentro del formulario y desaparece al empezar a escribir el registro siguiente o después de 4,5 segundos. El foco vuelve al número de predio para facilitar la carga consecutiva. Los errores se anuncian y la pantalla se desplaza hasta el mensaje.
