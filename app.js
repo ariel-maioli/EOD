@@ -114,6 +114,22 @@
     }).format(new Date(value));
   }
 
+  function argentinaDateKey(value) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "America/Argentina/Buenos_Aires"
+    }).formatToParts(value);
+    const part = (type) => parts.find((item) => item.type === type)?.value;
+    return `${part("year")}-${part("month")}-${part("day")}`;
+  }
+
+  function isFridayDateKey(dateKey) {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 5;
+  }
+
   function formatDateTime(value) {
     return new Intl.DateTimeFormat("es-AR", {
       dateStyle: "short",
@@ -471,26 +487,72 @@
   }
 
   function renderPayments() {
-    const paidVisits = state.visits
-      .filter((visit) => visit.paid_at && (isAdmin() || visit.created_by === state.user?.id))
-      .sort((a, b) => b.paid_at.localeCompare(a.paid_at));
-    const recentPaidVisits = paidVisits.slice(0, 15);
+    const visiblePaidVisits = state.visits
+      .filter((visit) => visit.paid_at
+        && (isAdmin() || visit.created_by === state.user?.id))
+      .sort((a, b) => b.paid_at.localeCompare(a.paid_at)
+        || b.visit_date.localeCompare(a.visit_date)
+        || b.created_at.localeCompare(a.created_at));
+    const fridayDate = visiblePaidVisits
+      .map((visit) => argentinaDateKey(new Date(visit.paid_at)))
+      .filter(isFridayDateKey)
+      .sort((a, b) => b.localeCompare(a))[0];
+    const paidVisits = fridayDate
+      ? visiblePaidVisits.filter((visit) => argentinaDateKey(new Date(visit.paid_at)) === fridayDate)
+      : [];
     const container = byId("payments-list");
-    byId("paid-visit-count").textContent = paidVisits.length > 15
-      ? `Últimas 15 de ${paidVisits.length}`
-      : `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
+    byId("paid-visits-date").textContent = fridayDate ? formatDate(fridayDate) : "—";
+    byId("paid-visit-count").textContent = `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
 
-    if (!recentPaidVisits.length) {
-      container.innerHTML = '<div class="empty-state">Todavía no hay visitas marcadas como abonadas.</div>';
+    if (!paidVisits.length) {
+      container.innerHTML = '<div class="empty-state">Todavía no hay pagos registrados en viernes.</div>';
+    } else {
+      container.innerHTML = paidVisits.map((visit) => `
+        <article class="payment-row${isAdmin() ? " payment-row-admin" : ""}">
+          <strong>${escapeHtml(visit.property_number)}</strong>
+          <span class="payment-date">${escapeHtml(formatPaymentDate(visit.paid_at))}</span>
+          ${isAdmin() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
+          ${isAdmin() ? `<button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir</button>` : ""}
+        </article>
+      `).join("");
+    }
+
+    const latestActiveVisitByProperty = new Map();
+    state.visits
+      .filter((visit) => {
+        const property = propertyFor(visit.property_number);
+        return !visit.archived_at
+          && property
+          && !property.archived_at;
+      })
+      .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
+        || b.created_at.localeCompare(a.created_at))
+      .forEach((visit) => {
+        if (!latestActiveVisitByProperty.has(visit.property_number)) {
+          latestActiveVisitByProperty.set(visit.property_number, visit);
+        }
+      });
+
+    const pendingVisits = [...latestActiveVisitByProperty.values()]
+      .filter((visit) => !visit.paid_at && (isAdmin() || visit.created_by === state.user?.id))
+      .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
+        || b.created_at.localeCompare(a.created_at));
+    const recentPendingVisits = pendingVisits.slice(0, 15);
+    const pendingContainer = byId("pending-payments-list");
+    byId("pending-visit-count").textContent = pendingVisits.length > 15
+      ? `Últimas 15 de ${pendingVisits.length}`
+      : `${pendingVisits.length} ${pendingVisits.length === 1 ? "visita" : "visitas"}`;
+
+    if (!recentPendingVisits.length) {
+      pendingContainer.innerHTML = '<div class="empty-state">No hay visitas pendientes de pago.</div>';
       return;
     }
 
-    container.innerHTML = recentPaidVisits.map((visit) => `
-      <article class="payment-row">
+    pendingContainer.innerHTML = recentPendingVisits.map((visit) => `
+      <article class="payment-row${isAdmin() ? " payment-row-admin" : ""}">
         <strong>${escapeHtml(visit.property_number)}</strong>
-        <span>${escapeHtml(profileName(visit.created_by))}</span>
-        <span>${escapeHtml(formatPaymentDate(visit.paid_at))}</span>
-        ${isAdmin() ? `<button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir</button>` : ""}
+        <span class="payment-date">${escapeHtml(formatDate(visit.visit_date))}</span>
+        ${isAdmin() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
       </article>
     `).join("");
   }

@@ -93,13 +93,21 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .payments-form small { color: var(--muted); line-height: 1.5; }
 .payments-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 24px; }
 .payments-history-heading h3 { margin: 0 0 12px; font-size: 1rem; }
+.payment-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.payment-column { min-width: 0; }
+.payment-column .payments-history-heading { margin-top: 14px; }
 .activity-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 20px; }
 .activity-heading h2 { margin: 0; }
 .info-tooltip { position: relative; display: inline-flex; width: 19px; height: 19px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font-size: .75rem; font-weight: 750; cursor: help; }
 .info-tooltip-text { position: absolute; z-index: 2; top: calc(100% + 8px); left: 50%; width: min(280px, calc(100vw - 48px)); padding: 10px 12px; border-radius: 8px; background: var(--ink); color: white; font-size: .82rem; font-weight: 400; line-height: 1.45; box-shadow: 0 5px 16px rgb(23 43 58 / 18%); opacity: 0; visibility: hidden; transform: translate(-50%, -3px); transition: opacity .15s ease, transform .15s ease, visibility .15s; }
 .info-tooltip:hover .info-tooltip-text, .info-tooltip:focus .info-tooltip-text { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
-.payment-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
-.payment-row > span { color: var(--muted); font-size: .9rem; }
+#payments-list { gap: 0; }
+.payment-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 14px; padding: 7px 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.payment-row:first-child { border-top: 1px solid var(--line); }
+.payment-row strong { font-variant-numeric: tabular-nums; }
+.payment-row > span { color: var(--muted); font-size: .88rem; }
+.payment-row-admin { grid-template-columns: minmax(90px, .7fr) minmax(90px, .8fr) minmax(120px, 1fr) auto; }
+.payment-row .button { justify-self: end; }
 .search-result-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
 .search-result-row > span { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
 .search-contact { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
@@ -162,10 +170,15 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   .page-heading { align-items: flex-start; }
   .result-top { align-items: flex-start; }
   .result-actions .button { flex: 1 1 auto; }
-  .payment-row { gap: 8px; padding: 8px; font-size: .9rem; }
+  .payment-row { gap: 6px 10px; padding: 8px; font-size: .9rem; }
+  .payment-row-admin { grid-template-columns: minmax(62px, .7fr) minmax(70px, .8fr) minmax(80px, 1fr) auto; }
   .payment-row .button { padding-inline: 8px; }
   .search-result-row { grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 8px; font-size: .9rem; }
   .search-contact { gap: 4px; }
   .search-contact > span { font-size: .8rem; }
   .contact-action { width: 27px; height: 27px; }
+}
+
+@media (max-width: 800px) {
+  .payment-columns { grid-template-columns: 1fr; gap: 10px; }
 }
