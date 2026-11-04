@@ -281,24 +281,22 @@
     const paidVisits = state.visits
       .filter((visit) => visit.paid_at)
       .sort((a, b) => b.paid_at.localeCompare(a.paid_at));
+    const recentPaidVisits = paidVisits.slice(0, 15);
     const container = byId("payments-list");
-    byId("paid-visit-count").textContent = `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
+    byId("paid-visit-count").textContent = paidVisits.length > 15
+      ? `Últimas 15 de ${paidVisits.length}`
+      : `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
 
-    if (!paidVisits.length) {
+    if (!recentPaidVisits.length) {
       container.innerHTML = '<div class="empty-state">Todavía no hay visitas marcadas como abonadas.</div>';
       return;
     }
 
-    container.innerHTML = paidVisits.map((visit) => `
-      <article class="result-card">
-        <div class="result-top">
-          <h3>Predio ${escapeHtml(visit.property_number)} · visita del ${escapeHtml(formatDate(visit.visit_date))}</h3>
-          <span class="state-label">Abonada</span>
-        </div>
-        <p><strong>Contacto:</strong> ${escapeHtml(visit.contact_name)}</p>
-        <p><strong>Fecha de pago:</strong> ${escapeHtml(formatPaymentDate(visit.paid_at))}</p>
-        <p class="result-meta">Registró el pago ${escapeHtml(profileName(visit.paid_by))}</p>
-        ${isAdmin() ? `<div class="result-actions"><button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir pago</button></div>` : ""}
+    container.innerHTML = recentPaidVisits.map((visit) => `
+      <article class="payment-row">
+        <strong>Predio ${escapeHtml(visit.property_number)}</strong>
+        <span>${escapeHtml(formatPaymentDate(visit.paid_at))}</span>
+        ${isAdmin() ? `<button class="button button-small button-secondary" type="button" data-action="correct-payment" data-id="${escapeHtml(visit.id)}">Corregir</button>` : ""}
       </article>
     `).join("");
   }
