@@ -1,8 +1,8 @@
 -- TEST DATA ONLY: run manually in the intended, empty EOD project.
--- Adds 50 visits for each of four technicians, for 200 total.
+-- Adds 50 visits for each technician currently present in public.profiles.
 -- Each technician receives 10 visits per week over five weekdays, from 2026-04-13.
 -- The first 40 visits per technician are paid on their week's Friday; the last 10
--- remain unpaid. This creates 200 properties and corresponding audit events.
+-- remain unpaid. One property and corresponding audit events are created per visit.
 -- JWT claim settings are transaction-local and let the existing metadata and
 -- payment triggers attribute each change to the selected account.
 begin;
@@ -15,31 +15,28 @@ create temporary table eod_seed_participants (
 
 insert into pg_temp.eod_seed_participants
     (participant_order, participant_id, participant_label)
-values
-    (1, '31624127-3160-4e8c-84ee-7923d288c313', 'Tecnico 1'),
-    (2, '35238520-054e-4cb5-ab68-45caf6d10e27', 'Tecnico 2'),
-    (3, '712aa132-b53b-451b-ae2e-7aa021fbb227', 'Tecnico 3'),
-    (4, 'b106b719-17d9-48bb-a6f5-6bbd82aaf444', 'Tecnico 4');
+select
+    row_number() over (order by profile.id)::integer,
+    profile.id,
+    format(
+        'Técnico %s',
+        row_number() over (order by profile.id)
+    )
+from public.profiles as profile
+where profile.role = 'technician';
 
 do $$
 begin
-    if exists (
-        select 1
-        from pg_temp.eod_seed_participants as participant
-        left join public.profiles as profile
-            on profile.id = participant.participant_id
-        where profile.id is null or profile.role <> 'technician'
-    ) then
-        raise exception 'The supplied UUIDs must match technician profiles in this project';
+    if not exists (select 1 from pg_temp.eod_seed_participants) then
+        raise exception 'At least one technician profile is required before seeding test data';
     end if;
 
     if not exists (
         select 1
         from public.profiles
-        where id = '4a658b2b-44bb-4837-b160-787d61c83183'
-          and role = 'admin'
+        where role = 'admin'
     ) then
-        raise exception 'The supplied payment account UUID must match an admin profile in this project';
+        raise exception 'At least one admin profile is required before seeding test data';
     end if;
 
     if exists (select 1 from public.properties)
@@ -131,6 +128,7 @@ from numbered_visits as planned;
 do $$
 declare
     participant record;
+    admin_id uuid;
 begin
     for participant in
         select participant_id
@@ -174,11 +172,21 @@ begin
         where participant_id = participant.participant_id;
     end loop;
 
-    perform set_config('request.jwt.claim.sub', '4a658b2b-44bb-4837-b160-787d61c83183', true);
+    select id
+    into admin_id
+    from public.profiles
+    where role = 'admin'
+    order by id
+    limit 1;
+
+    perform set_config('request.jwt.claim.sub', admin_id::text, true);
     perform set_config('request.jwt.claim.role', 'authenticated', true);
     perform set_config(
         'request.jwt.claims',
-        '{"sub":"4a658b2b-44bb-4837-b160-787d61c83183","role":"authenticated"}',
+        jsonb_build_object(
+            'sub', admin_id::text,
+            'role', 'authenticated'
+        )::text,
         true
     );
 
@@ -193,16 +201,19 @@ end;
 $$;
 
 do $$
+declare
+    expected_visits integer;
 begin
-    if (select count(*) from public.visits) <> 200
-       or (select count(*) from public.properties) <> 200
-       or (select count(*) from public.visits where paid_at is not null) <> 160
-       or (select count(*) from public.visits where paid_at is null) <> 40
-       or exists (
-           select 1
-           from public.visits
-           where created_by = '4a658b2b-44bb-4837-b160-787d61c83183'
-       )
+    select count(*) * 50
+    into expected_visits
+    from pg_temp.eod_seed_participants;
+
+    if (select count(*) from public.visits) <> expected_visits
+       or (select count(*) from public.properties) <> expected_visits
+       or (select count(*) from public.visits where paid_at is not null)
+            <> (expected_visits * 4 / 5)
+       or (select count(*) from public.visits where paid_at is null)
+            <> (expected_visits / 5)
        or exists (
            select participant_id, week_index
            from pg_temp.eod_seed_visits
@@ -220,6 +231,15 @@ begin
            from public.visits
            group by created_by
            having count(*) <> 50
+       )
+       or exists (
+           select 1
+           from public.visits as visit
+           where not exists (
+              select 1
+              from pg_temp.eod_seed_participants as participant
+              where participant.participant_id = visit.created_by
+           )
        ) then
         raise exception 'Seed validation failed; the transaction must not be committed';
     end if;

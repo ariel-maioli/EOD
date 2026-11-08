@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const config = window.EOD_CONFIG;
+  let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
     client: null,
@@ -94,6 +94,26 @@
   function localDateInputValue(date = new Date()) {
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 10);
+  }
+
+  function currentArgentinaWeek() {
+    const [year, month, day] = argentinaDateKey(new Date()).split("-").map(Number);
+    const today = new Date(Date.UTC(year, month - 1, day));
+    const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+    const monday = new Date(today);
+    monday.setUTCDate(today.getUTCDate() - daysSinceMonday);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const dateKey = (value) => value.toISOString().slice(0, 10);
+    return { from: dateKey(monday), to: dateKey(sunday) };
+  }
+
+  function setAdminVisitWeek() {
+    const { from, to } = currentArgentinaWeek();
+    byId("filter-from").value = from;
+    byId("filter-to").value = to;
+    byId("filter-user").value = "";
+    byId("filter-status").value = "active";
   }
 
   function setVisitDateLimit() {
@@ -413,6 +433,7 @@
     const selected = select.value;
     const options = ['<option value="">Todos</option>'];
     state.profiles
+      .filter((profile) => profile.role === "technician")
       .slice()
       .sort((a, b) => profileName(a.id).localeCompare(profileName(b.id), "es"))
       .forEach((profile) => {
@@ -479,14 +500,18 @@
     }
 
     state.viewAsTechnicianId = technicianId;
-    byId("filter-user").value = "";
-    byId("filter-status").value = "active";
     byId("search-query").value = "";
-    byId("filter-from").value = "";
-    byId("filter-to").value = "";
+    if (technicianId) {
+      byId("filter-user").value = "";
+      byId("filter-status").value = "active";
+      byId("filter-from").value = "";
+      byId("filter-to").value = "";
+    } else {
+      setAdminVisitWeek();
+    }
     resetVisitForm();
     configureRoleExperience();
-    setView(technicianId ? "form-view" : "activity-view");
+    setView(technicianId ? "form-view" : "search-view");
     await loadData();
   }
 
@@ -517,6 +542,11 @@
       if (from && visit.visit_date < from) return false;
       if (to && visit.visit_date > to) return false;
       if (userId && visit.created_by !== userId) return false;
+      if (canUseAdminFeatures() && !userId
+          && !state.profiles.some((profile) =>
+            profile.id === visit.created_by && profile.role === "technician")) {
+        return false;
+      }
 
       if (query) {
         const searchableText = normalize([
@@ -798,11 +828,12 @@
     byId("application").hidden = false;
     byId("session-area").hidden = false;
     byId("session-email").textContent = profileName(data.id);
-    byId("filter-status").value = "active";
+    if (isAdmin()) setAdminVisitWeek();
+    else byId("filter-status").value = "active";
     setVisitDateLimit();
     byId("visit-date").value = localDateInputValue();
     resetVisitForm();
-    setView(isAdmin() ? "activity-view" : "form-view");
+    setView(isAdmin() ? "search-view" : "form-view");
     await loadData();
     if (!isAdmin()) focusPropertyNumber();
     return true;
@@ -1229,6 +1260,26 @@
 
   async function start() {
     bindEvents();
+    const developmentMode = new URLSearchParams(window.location.search).get("env") === "dev";
+    if (developmentMode) {
+      config = null;
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "config.dev.js";
+          script.onload = resolve;
+          script.onerror = () => reject(new Error(
+            "No se pudo cargar config.dev.js. Creá el archivo con la URL y la clave pública del proyecto EOD-dev."
+          ));
+          document.head.append(script);
+        });
+        config = window.EOD_CONFIG;
+      } catch (error) {
+        byId("setup-panel").hidden = false;
+        throw error;
+      }
+    }
+
     const configured = config?.supabaseUrl && config?.supabaseAnonKey
       && !config.supabaseUrl.includes("YOUR-PROJECT")
       && !config.supabaseAnonKey.includes("YOUR-ANON-KEY");

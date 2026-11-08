@@ -28,6 +28,21 @@ Aplicación web para registrar y consultar visitas de mantenimiento a predios. L
 
 6. En **Authentication → URL Configuration**, configurá **Site URL** con la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`. EOD no ofrece recuperación ni cambio de contraseña desde la interfaz; quitar esa opción no impide que Supabase Auth permita cambiarla por otros medios.
 
+## Desarrollo local con un proyecto Supabase separado
+
+Para probar sin afectar producción, creá `config.dev.js` en la carpeta raíz `EOD` con la **Project URL** y la clave pública **anon/publishable** de **EOD-dev**:
+
+```js
+window.EOD_CONFIG = Object.freeze({
+  supabaseUrl: "https://TU-PROYECTO-DEV.supabase.co",
+  supabaseAnonKey: "TU-CLAVE-PUBLICA-DEV"
+});
+```
+
+El archivo `config.dev.js` está excluido de Git. Abrí `index.html?env=dev` en el navegador; por ejemplo, `file:///C:/ThNet/EOD/index.html?env=dev`. Ese modo carga únicamente `config.dev.js` y no usa la configuración de producción si el archivo falta o no carga. Para la aplicación publicada, seguí usando `index.html` sin `?env=dev`; esta usa `config.js` y producción.
+
+Usá la clave pública de Supabase, nunca la clave `service_role` ni una clave secreta. La clave pública no concede permisos por sí sola; el acceso a los datos depende de las políticas RLS.
+
 ## Actualizar un proyecto Supabase existente
 
 Ejecutá el contenido completo de [`schema.sql`](./schema.sql) en **SQL Editor** para actualizar un proyecto EOD existente. El archivo incluye todas las definiciones actuales: nombres visibles, permisos de edición, seguimiento y privacidad de pagos, y bloqueo de fechas futuras. Crea o actualiza objetos y políticas; no borra visitas, predios, perfiles ni auditoría. Usá el script del proyecto correcto y no lo confundas con [`clear_production_visits.sql`](./clear_production_visits.sql), que sí es destructivo.
@@ -74,7 +89,7 @@ Verificá que estés en el proyecto Supabase correcto al ejecutar ambos comandos
 
 ## Buscar visitas
 
-Al abrir **Buscar visitas**, cada usuario ve sus últimas 25 visitas. Al escribir un predio, nombre o celular, indicar fechas o (para el administrador) cambiar técnico o estado, la aplicación busca en todos los registros que ese usuario puede consultar. La consulta completa se pagina para no quedar limitada al máximo de filas de una sola respuesta de Supabase. Los resultados se ordenan por fecha de visita descendente; si coinciden, se prioriza el registro más reciente.
+Al ingresar, el administrador abre **Buscar visitas** con las fechas de lunes a domingo de la semana actual (hora de Argentina), todos los técnicos y visitas activas. Los técnicos ven sus últimas 25 visitas. Al escribir un predio, nombre o celular, cambiar fechas o (para el administrador) cambiar técnico o estado, la aplicación busca en todos los registros que ese usuario puede consultar. La consulta completa se pagina para no quedar limitada al máximo de filas de una sola respuesta de Supabase. Los resultados se ordenan por fecha de visita descendente; si coinciden, se prioriza el registro más reciente.
 
 - **Técnicos:** en la pantalla de búsqueda, la aplicación muestra solo predios activos y los datos básicos de cada visita: número, fecha, contacto y celular. No tienen filtros por técnico ni por estado. Cada fila permite abrir WhatsApp para el número argentino o copiar el celular. Esta limitación de campos corresponde a la interfaz; no implica que todas las demás columnas estén restringidas en la API de Supabase.
 - **Administrador:** conserva acceso a visitas activas y archivadas, ve los detalles y acciones administrativas, y puede filtrar por técnico y estado.
@@ -100,9 +115,11 @@ Revisá el contenido y verificá que estás conectado al proyecto correcto antes
 
 ## Generar datos de prueba
 
-[`seed_test_visits.sql`](./seed_test_visits.sql) crea 200 visitas y 200 predios para probar la aplicación: 50 visitas por cada uno de cuatro técnicos. El administrador no recibe visitas; su cuenta solo se usa para registrar los pagos. Las visitas se distribuyen aleatoriamente de lunes a viernes, 10 por semana durante cinco semanas desde el 13 de abril de 2026. Las primeras 40 por técnico quedan abonadas en el viernes de su semana y las últimas 10 quedan impagas.
+[`seed_test_visits.sql`](./seed_test_visits.sql) crea 50 visitas por cada técnico existente y un predio por visita. Con los tres técnicos de EOD-dev, genera 150 visitas y predios. El administrador no recibe visitas; una cuenta admin solo se usa para registrar los pagos. Las visitas se distribuyen aleatoriamente de lunes a viernes, 10 por semana durante cinco semanas desde el 13 de abril de 2026. Las primeras 40 por técnico quedan abonadas en el viernes de su semana y las últimas 10 quedan impagas.
 
-El script contiene los UUID de las cuentas de prueba y verifica que existan con los roles esperados. Solo se puede ejecutar si las tablas `properties` y `visits` están vacías; está destinado al proyecto nuevo de pruebas, no a producción. Ejecutalo manualmente en **Supabase → SQL Editor** después de crear las cuentas y configurar sus roles. La transacción se revierte si falla alguna validación.
+El script detecta las cuentas y roles directamente en el proyecto seleccionado. Solo se puede ejecutar si existe al menos un admin y un técnico, y las tablas `properties` y `visits` están vacías; está destinado al proyecto nuevo de pruebas, no a producción. Ejecutalo manualmente en **Supabase → SQL Editor** después de verificar que estás conectado a EOD-dev. La transacción se revierte si falla alguna validación.
+
+[`seed_current_week_visits.sql`](./seed_current_week_visits.sql) agrega datos para la semana actual sin borrar los registros existentes. Crea dos visitas por técnico por cada día hábil transcurrido de la semana (lunes a viernes), con fechas de Argentina y predios de prueba disponibles. Si ya pasó el viernes a las 18:00, marca ocho visitas por técnico como abonadas ese viernes y deja las dos restantes pendientes. El script evita duplicar una carga de prueba de la misma semana y revierte todo si falla una validación. Ejecutalo manualmente en **Supabase → SQL Editor** después de confirmar que estás en EOD-dev; no lo uses en producción.
 
 ## Publicar con GitHub Pages
 
