@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.6";
+  const APP_VERSION = "20261110.10";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -1248,6 +1248,9 @@
       showNotice("Ingresá al menos un número de predio.", true);
       return;
     }
+    const quantity = new Set(numbers).size;
+    const confirmation = `¿Realmente desea agregar ${quantity} ${quantity === 1 ? "predio" : "predios"} al inventario?`;
+    if (!window.confirm(confirmation)) return;
 
     byId("property-add-result").innerHTML = "";
     setBusy(true);
@@ -1299,6 +1302,9 @@
       `Estos predios ya tienen otro responsable: ${toReassign.join(", ")}. ` +
       "Si continuás, se cerrará la asignación actual y se conservará en el historial. ¿Querés continuar?"
     )) return;
+    const quantity = new Set(numbers).size;
+    const confirmation = `¿Se asignarán ${quantity} ${quantity === 1 ? "predio" : "predios"} al técnico ${profileName(targetAssignee)}?`;
+    if (!window.confirm(confirmation)) return;
 
     byId("property-assign-result").innerHTML = "";
     setBusy(true);
