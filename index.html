@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261109.1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=20261109.1" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -68,6 +68,7 @@
         <button class="tab-button" type="button" data-view="form-view">Nueva visita</button>
         <button class="tab-button" type="button" data-view="search-view">Buscar visitas</button>
         <button class="tab-button" type="button" data-view="payments-view">Pagos</button>
+        <button id="properties-tab" class="tab-button" type="button" data-view="properties-view" hidden>Predios</button>
         <button id="activity-tab" class="tab-button" type="button" data-view="activity-view" hidden>Actividad reciente</button>
       </nav>
 
@@ -85,6 +86,7 @@
             <label class="field" for="property-number">
               <span>Número de predio <span class="required">*</span></span>
               <input id="property-number" name="property_number" type="text" inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6" placeholder="Ej.: 123456" required>
+              <small>Debe existir en el inventario y estar asignado a tu usuario.</small>
             </label>
             <label class="field" for="visit-date">
               <span>Fecha de visita <span class="required">*</span></span>
@@ -168,6 +170,88 @@
             </span>
           </div>
           <div id="activity-list" class="activity-list"></div>
+        </div>
+      </section>
+
+      <section id="properties-view" class="view-panel" hidden>
+        <div class="card">
+          <div class="eyebrow">Administración de inventario</div>
+          <h2>Predios</h2>
+          <p class="muted">Primero cargá los predios al inventario. Luego, en un proceso separado, asigná los existentes a un responsable. Cada asignación se completa al registrar su visita.</p>
+          <div id="property-summary" class="property-summary"></div>
+          <section class="property-alert-section" aria-labelledby="property-alert-heading">
+            <h3 id="property-alert-heading">Cobertura próxima a agotarse</h3>
+            <div id="property-alerts" class="results-list" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Proceso 1</div>
+          <h2>Agregar al inventario</h2>
+          <form id="property-add-form" class="stack property-form">
+            <label class="field" for="property-add-list">
+              <span>Números de predio</span>
+              <textarea id="property-add-list" rows="3" placeholder="123456, 234567, 345678" required></textarea>
+              <small>Acepta uno o varios, separados por coma. Solo 6 dígitos y sin cero inicial.</small>
+            </label>
+            <button class="button button-primary" type="submit">Agregar predios</button>
+          </form>
+          <div id="property-add-result" class="property-operation-result" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Proceso 2</div>
+          <h2>Asignar predios</h2>
+          <form id="property-assign-form" class="stack property-form">
+            <label class="field" for="property-assign-list">
+              <span>Números de predio</span>
+              <textarea id="property-assign-list" rows="3" placeholder="123456, 234567, 345678" required></textarea>
+              <small>Solo se asignan predios que ya estén en el inventario. Una reasignación cierra la anterior y conserva su historial.</small>
+            </label>
+            <label class="field" for="property-assignee">
+              <span>Responsable</span>
+              <select id="property-assignee" required></select>
+            </label>
+            <button class="button button-primary" type="submit">Asignar predios</button>
+          </form>
+          <div id="property-assign-result" class="property-operation-result" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Seguimiento</div>
+          <div class="section-heading">
+            <h2>Inventario</h2>
+            <label class="field property-status-filter" for="property-status-filter">
+              <span>Estado</span>
+              <select id="property-status-filter">
+                <option value="all">Todos</option>
+                <option value="unassigned">Sin asignar</option>
+                <option value="pending">Pendientes</option>
+                <option value="visited">Visitados</option>
+                <option value="archived">Archivados</option>
+              </select>
+            </label>
+          </div>
+          <div id="property-inventory" class="property-inventory" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Parámetros de cobertura</div>
+          <h2>Estimación y alertas</h2>
+          <p class="muted">La cobertura se estima en días hábiles (lunes a viernes), usando los predios pendientes asignados a cada responsable.</p>
+          <form id="property-settings-form" class="form-grid property-settings-form">
+            <label class="field" for="visits-per-workday">
+              <span>Predios por día hábil</span>
+              <input id="visits-per-workday" type="number" min="1" step="1" required>
+            </label>
+            <label class="field" for="property-alert-days">
+              <span>Alertar cuando queden (días hábiles)</span>
+              <input id="property-alert-days" type="number" min="1" step="1" required>
+            </label>
+            <div class="form-actions field-full">
+              <button class="button button-primary" type="submit">Guardar parámetros</button>
+            </div>
+          </form>
         </div>
       </section>
 

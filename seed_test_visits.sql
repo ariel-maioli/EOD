@@ -1,6 +1,7 @@
 -- TEST DATA ONLY: run manually in the intended, empty EOD project.
 -- Adds 50 visits for each technician currently present in public.profiles.
--- Each technician receives 10 visits per week over five weekdays, from 2026-04-13.
+-- Each technician receives 10 visits per week over five weekdays in the latest
+-- five complete weeks before the current week.
 -- The first 40 visits per technician are paid on their week's Friday; the last 10
 -- remain unpaid. One property and corresponding audit events are created per visit.
 -- JWT claim settings are transaction-local and let the existing metadata and
@@ -40,8 +41,9 @@ begin
     end if;
 
     if exists (select 1 from public.properties)
-       or exists (select 1 from public.visits) then
-        raise exception 'Test data can only be seeded when properties and visits are empty';
+       or exists (select 1 from public.visits)
+       or exists (select 1 from public.property_assignments) then
+        raise exception 'Test data can only be seeded when properties, visits, and assignments are empty';
     end if;
 end;
 $$;
@@ -57,6 +59,14 @@ create temporary table eod_seed_visits (
     cellphone text not null,
     notes text not null
 ) on commit drop;
+
+create temporary table eod_seed_config on commit drop as
+select
+    (local_now::date - (extract(isodow from local_now)::integer - 1) - 35)::date
+        as first_monday
+from (
+    select now() at time zone 'America/Argentina/Buenos_Aires' as local_now
+) as current_clock;
 
 with weekly_random as (
     select
@@ -119,59 +129,19 @@ select
     planned.visit_index,
     planned.week_index,
     900000 + ((planned.participant_order - 1) * 50) + planned.visit_index,
-    date '2026-04-13' + (planned.week_index * 7) + planned.day_index,
+    config.first_monday + (planned.week_index * 7) + planned.day_index,
     format('Prueba T%s V%s', planned.participant_order, lpad(planned.visit_index::text, 3, '0')),
     '3' || lpad((((planned.participant_order - 1) * 50) + planned.visit_index)::text, 9, '0'),
     'Registro de prueba generado'
-from numbered_visits as planned;
+from numbered_visits as planned
+cross join pg_temp.eod_seed_config as config;
 
 do $$
 declare
     participant record;
+    seed_visit record;
     admin_id uuid;
 begin
-    for participant in
-        select participant_id
-        from pg_temp.eod_seed_participants
-        order by participant_order
-    loop
-        perform set_config('request.jwt.claim.sub', participant.participant_id::text, true);
-        perform set_config('request.jwt.claim.role', 'authenticated', true);
-        perform set_config(
-            'request.jwt.claims',
-            jsonb_build_object(
-                'sub', participant.participant_id::text,
-                'role', 'authenticated'
-            )::text,
-            true
-        );
-
-        insert into public.properties (property_number, created_by, updated_by)
-        select property_number, participant.participant_id, participant.participant_id
-        from pg_temp.eod_seed_visits
-        where participant_id = participant.participant_id;
-
-        insert into public.visits (
-            property_number,
-            visit_date,
-            contact_name,
-            cellphone,
-            notes,
-            created_by,
-            updated_by
-        )
-        select
-            property_number,
-            visit_date,
-            contact_name,
-            cellphone,
-            notes,
-            participant.participant_id,
-            participant.participant_id
-        from pg_temp.eod_seed_visits
-        where participant_id = participant.participant_id;
-    end loop;
-
     select id
     into admin_id
     from public.profiles
@@ -183,16 +153,74 @@ begin
     perform set_config('request.jwt.claim.role', 'authenticated', true);
     perform set_config(
         'request.jwt.claims',
-        jsonb_build_object(
-            'sub', admin_id::text,
-            'role', 'authenticated'
-        )::text,
+        jsonb_build_object('sub', admin_id::text, 'role', 'authenticated')::text,
+        true
+    );
+    insert into public.properties (property_number, created_by, updated_by)
+    select property_number, admin_id, admin_id
+    from pg_temp.eod_seed_visits;
+
+    for participant in
+        select participant_id
+        from pg_temp.eod_seed_participants
+        order by participant_order
+    loop
+        perform set_config('request.jwt.claim.sub', admin_id::text, true);
+        perform set_config('request.jwt.claim.role', 'authenticated', true);
+        perform set_config(
+            'request.jwt.claims',
+            jsonb_build_object(
+                'sub', admin_id::text,
+                'role', 'authenticated'
+            )::text,
+            true
+        );
+
+        insert into public.property_assignments (
+            property_number, assigned_to, assigned_by
+        )
+        select property_number, participant.participant_id, admin_id
+        from pg_temp.eod_seed_visits
+        where participant_id = participant.participant_id;
+
+        perform set_config('request.jwt.claim.sub', participant.participant_id::text, true);
+        perform set_config(
+            'request.jwt.claims',
+            jsonb_build_object(
+                'sub', participant.participant_id::text,
+                'role', 'authenticated'
+            )::text,
+            true
+        );
+        for seed_visit in
+            select *
+            from pg_temp.eod_seed_visits
+            where participant_id = participant.participant_id
+        loop
+            perform public.create_visit(
+                seed_visit.property_number,
+                seed_visit.visit_date,
+                seed_visit.contact_name,
+                seed_visit.cellphone,
+                seed_visit.notes
+            );
+        end loop;
+    end loop;
+
+    perform set_config('request.jwt.claim.sub', admin_id::text, true);
+    perform set_config('request.jwt.claim.role', 'authenticated', true);
+    perform set_config(
+        'request.jwt.claims',
+        jsonb_build_object('sub', admin_id::text, 'role', 'authenticated')::text,
         true
     );
 
     update public.visits as visit
     set paid_at = (
-        date '2026-04-17' + (seed.week_index * 7) + time '18:00'
+        (
+            (select first_monday from pg_temp.eod_seed_config)
+            + (seed.week_index * 7) + 4
+        ) + time '18:00'
     ) at time zone 'America/Argentina/Buenos_Aires'
     from pg_temp.eod_seed_visits as seed
     where seed.visit_index <= 40
@@ -210,6 +238,17 @@ begin
 
     if (select count(*) from public.visits) <> expected_visits
        or (select count(*) from public.properties) <> expected_visits
+       or (select count(*) from public.property_assignments) <> expected_visits
+       or exists (
+           select 1
+           from public.visits
+           where assignment_id is null
+       )
+       or exists (
+           select 1
+           from public.property_assignments
+           where completed_at is null or closed_at is null
+       )
        or (select count(*) from public.visits where paid_at is not null)
             <> (expected_visits * 4 / 5)
        or (select count(*) from public.visits where paid_at is null)

@@ -1,7 +1,7 @@
 -- EOD database schema for Supabase.
 -- Complete EOD schema: includes profile names, visit permissions, payments,
 -- payment visibility restrictions, audit logging, future-date validation,
--- and maintenance-mode access controls.
+-- maintenance-mode access controls, property inventory, and assignments.
 -- Run the full file in the Supabase SQL Editor for a new or existing EOD project.
 -- This file creates/updates schema objects and policies; it does not delete application data.
 -- Create/invite users in Supabase Auth, then promote the first admin:
@@ -129,9 +129,86 @@ alter table public.visits
 alter table public.visits
     add column if not exists paid_by uuid references auth.users (id);
 
+alter table public.visits
+    add column if not exists assignment_id uuid;
+
+create table if not exists public.property_assignments (
+    id uuid primary key default gen_random_uuid(),
+    property_number integer not null
+        references public.properties (property_number),
+    assigned_to uuid not null references public.profiles (id),
+    assigned_by uuid not null references public.profiles (id),
+    assigned_at timestamptz not null default now(),
+    completed_at timestamptz,
+    completed_by uuid references public.profiles (id),
+    closed_at timestamptz,
+    closed_by uuid references public.profiles (id),
+    close_reason text
+        check (close_reason in ('visited', 'reassigned')),
+    check (
+        (completed_at is null and completed_by is null)
+        or (completed_at is not null and completed_by is not null)
+    ),
+    check (
+        (closed_at is null and closed_by is null and close_reason is null)
+        or (closed_at is not null and closed_by is not null and close_reason is not null)
+    )
+);
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.visits'::regclass
+          and conname = 'visits_assignment_id_fkey'
+    ) then
+        alter table public.visits
+            add constraint visits_assignment_id_fkey
+            foreign key (assignment_id) references public.property_assignments (id);
+    end if;
+end;
+$$;
+
+create unique index if not exists property_assignments_one_open_per_property_idx
+    on public.property_assignments (property_number)
+    where closed_at is null;
+create unique index if not exists property_assignments_id_property_key
+    on public.property_assignments (id, property_number);
+create index if not exists property_assignments_assignee_idx
+    on public.property_assignments (assigned_to, assigned_at desc);
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conrelid = 'public.visits'::regclass
+          and conname = 'visits_assignment_property_fkey'
+    ) then
+        alter table public.visits
+            add constraint visits_assignment_property_fkey
+            foreign key (assignment_id, property_number)
+            references public.property_assignments (id, property_number);
+    end if;
+end;
+$$;
+
+create table if not exists public.property_tracking_settings (
+    id boolean primary key default true check (id),
+    visits_per_workday integer not null default 2 check (visits_per_workday > 0),
+    alert_days integer not null default 15 check (alert_days > 0),
+    updated_by uuid references public.profiles (id),
+    updated_at timestamptz not null default now()
+);
+
+insert into public.property_tracking_settings (id, visits_per_workday, alert_days)
+values (true, 2, 15)
+on conflict (id) do nothing;
+
 create table if not exists public.audit_log (
     id bigint generated always as identity primary key,
-    entity_type text not null check (entity_type in ('property', 'visit')),
+    entity_type text not null,
     entity_id text not null,
     action text not null check (action in ('INSERT', 'UPDATE', 'DELETE')),
     actor_id uuid,
@@ -140,10 +217,18 @@ create table if not exists public.audit_log (
     new_data jsonb
 );
 
+alter table public.audit_log
+    drop constraint if exists audit_log_entity_type_check;
+alter table public.audit_log
+    add constraint audit_log_entity_type_check
+    check (entity_type in ('property', 'visit', 'assignment'));
+
 create index if not exists visits_date_idx
     on public.visits (visit_date desc);
 create index if not exists visits_created_by_date_idx
     on public.visits (created_by, visit_date desc);
+create index if not exists visits_assignment_idx
+    on public.visits (assignment_id);
 create index if not exists audit_log_changed_at_idx
     on public.audit_log (changed_at desc);
 
@@ -159,6 +244,9 @@ begin
     end if;
 
     if tg_op = 'INSERT' then
+        if tg_table_name = 'properties' and not public.is_admin() then
+            raise exception 'Only an admin can add properties to the inventory';
+        end if;
         new.created_by := auth.uid();
         new.created_at := now();
         new.updated_by := auth.uid();
@@ -178,6 +266,10 @@ begin
         if tg_table_name = 'properties'
            and new.property_number is distinct from old.property_number then
             raise exception 'A property number cannot be changed';
+        end if;
+        if tg_table_name = 'visits'
+           and new.property_number is distinct from old.property_number then
+            raise exception 'A visit property number cannot be changed';
         end if;
 
         new.created_by := old.created_by;
@@ -297,6 +389,11 @@ create trigger visits_set_metadata
 before insert or update on public.visits
 for each row execute function public.set_record_metadata();
 
+drop trigger if exists property_assignments_audit_changes on public.property_assignments;
+create trigger property_assignments_audit_changes
+after insert or update or delete on public.property_assignments
+for each row execute function public.write_audit_log('assignment', 'id');
+
 drop trigger if exists visits_guard_payment on public.visits;
 create trigger visits_guard_payment
 before insert or update on public.visits
@@ -330,6 +427,290 @@ create trigger visits_audit_changes
 after insert or update or delete on public.visits
 for each row execute function public.write_audit_log('visit', 'id');
 
+create or replace function public.has_active_property_assignment(
+    p_property_number integer,
+    p_user_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select auth.uid() is not null
+      and public.application_access_allowed()
+      and (public.is_admin() or p_user_id = auth.uid())
+      and exists (
+          select 1
+          from public.property_assignments as assignment
+          where assignment.property_number = p_property_number
+            and assignment.assigned_to = p_user_id
+            and assignment.closed_at is null
+      );
+$$;
+
+create or replace function public.can_access_visit(
+    p_property_number integer,
+    p_assignment_id uuid,
+    p_created_by uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select auth.uid() is not null
+      and public.application_access_allowed()
+      and p_created_by = auth.uid()
+      and exists (
+          select 1
+          from public.property_assignments as assignment
+          where assignment.id = p_assignment_id
+            and assignment.property_number = p_property_number
+            and assignment.assigned_to = auth.uid()
+      )
+      and exists (
+          select 1
+          from public.properties as property
+          where property.property_number = p_property_number
+            and property.archived_at is null
+      );
+$$;
+
+create or replace function public.add_properties(p_property_numbers text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_item text;
+    v_number integer;
+    v_seen text[] := array[]::text[];
+    v_result jsonb := jsonb_build_object(
+        'added', '[]'::jsonb,
+        'existing', '[]'::jsonb,
+        'duplicates', '[]'::jsonb,
+        'invalid', '[]'::jsonb,
+        'errors', '[]'::jsonb
+    );
+    v_rows integer;
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can add properties to the inventory';
+    end if;
+
+    foreach v_item in array coalesce(p_property_numbers, array[]::text[])
+    loop
+        if v_item = any(v_seen) then
+            v_result := jsonb_set(v_result, '{duplicates}',
+                (v_result -> 'duplicates') || jsonb_build_array(v_item));
+            continue;
+        end if;
+        v_seen := array_append(v_seen, v_item);
+
+        if v_item is null or btrim(v_item) !~ '^[1-9][0-9]{5}$' then
+            v_result := jsonb_set(v_result, '{invalid}',
+                (v_result -> 'invalid') || jsonb_build_array(v_item));
+            continue;
+        end if;
+        v_number := btrim(v_item)::integer;
+
+        begin
+            insert into public.properties (property_number, created_by, updated_by)
+            values (v_number, auth.uid(), auth.uid())
+            on conflict (property_number) do nothing;
+            get diagnostics v_rows = row_count;
+            if v_rows = 1 then
+                v_result := jsonb_set(v_result, '{added}',
+                    (v_result -> 'added') || jsonb_build_array(v_number));
+            else
+                v_result := jsonb_set(v_result, '{existing}',
+                    (v_result -> 'existing') || jsonb_build_array(v_number));
+            end if;
+        exception when others then
+            v_result := jsonb_set(v_result, '{errors}',
+                (v_result -> 'errors') || jsonb_build_array(
+                    jsonb_build_object('property', v_item, 'message', sqlerrm)
+                ));
+        end;
+    end loop;
+
+    return v_result;
+end;
+$$;
+
+create or replace function public.assign_properties(
+    p_property_numbers text[],
+    p_assigned_to uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_item text;
+    v_number integer;
+    v_seen text[] := array[]::text[];
+    v_assignee_role text;
+    v_locked_property integer;
+    v_active_assignment record;
+    v_was_reassigned boolean;
+    v_result jsonb := jsonb_build_object(
+        'assigned', '[]'::jsonb,
+        'reassigned', '[]'::jsonb,
+        'already_assigned', '[]'::jsonb,
+        'not_found', '[]'::jsonb,
+        'invalid', '[]'::jsonb,
+        'duplicates', '[]'::jsonb,
+        'errors', '[]'::jsonb
+    );
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can assign properties';
+    end if;
+    if not public.application_access_allowed() then
+        raise exception 'The application is in maintenance mode';
+    end if;
+
+    select role into v_assignee_role
+    from public.profiles
+    where id = p_assigned_to;
+    if not found or v_assignee_role not in ('admin', 'technician') then
+        raise exception 'The selected assignee does not exist';
+    end if;
+
+    foreach v_item in array coalesce(p_property_numbers, array[]::text[])
+    loop
+        if v_item = any(v_seen) then
+            v_result := jsonb_set(v_result, '{duplicates}',
+                (v_result -> 'duplicates') || jsonb_build_array(v_item));
+            continue;
+        end if;
+        v_seen := array_append(v_seen, v_item);
+
+        if v_item is null or btrim(v_item) !~ '^[1-9][0-9]{5}$' then
+            v_result := jsonb_set(v_result, '{invalid}',
+                (v_result -> 'invalid') || jsonb_build_array(v_item));
+            continue;
+        end if;
+        v_number := btrim(v_item)::integer;
+
+        begin
+            select property_number
+            into v_locked_property
+            from public.properties
+            where property_number = v_number
+              and archived_at is null
+            for update;
+            if not found then
+                v_result := jsonb_set(v_result, '{not_found}',
+                    (v_result -> 'not_found') || jsonb_build_array(v_number));
+                continue;
+            end if;
+
+            select id, assigned_to
+            into v_active_assignment
+            from public.property_assignments
+            where property_number = v_number
+              and closed_at is null
+            for update;
+
+            if found and v_active_assignment.assigned_to = p_assigned_to then
+                v_result := jsonb_set(v_result, '{already_assigned}',
+                    (v_result -> 'already_assigned') || jsonb_build_array(v_number));
+                continue;
+            end if;
+
+            v_was_reassigned := found;
+            if found then
+                update public.property_assignments
+                set closed_at = now(),
+                    closed_by = auth.uid(),
+                    close_reason = 'reassigned'
+                where id = v_active_assignment.id;
+            end if;
+
+            insert into public.property_assignments (
+                property_number, assigned_to, assigned_by
+            )
+            values (v_number, p_assigned_to, auth.uid());
+            if v_was_reassigned then
+                v_result := jsonb_set(v_result, '{reassigned}',
+                    (v_result -> 'reassigned') || jsonb_build_array(v_number));
+            else
+                v_result := jsonb_set(v_result, '{assigned}',
+                    (v_result -> 'assigned') || jsonb_build_array(v_number));
+            end if;
+        exception when others then
+            v_result := jsonb_set(v_result, '{errors}',
+                (v_result -> 'errors') || jsonb_build_array(
+                    jsonb_build_object('property', v_item, 'message', sqlerrm)
+                ));
+        end;
+    end loop;
+
+    return v_result;
+end;
+$$;
+
+create or replace function public.get_property_tracking_settings()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    v_settings public.property_tracking_settings;
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can view tracking settings';
+    end if;
+    select * into v_settings
+    from public.property_tracking_settings
+    where id is true;
+    return jsonb_build_object(
+        'visits_per_workday', v_settings.visits_per_workday,
+        'alert_days', v_settings.alert_days
+    );
+end;
+$$;
+
+create or replace function public.update_property_tracking_settings(
+    p_visits_per_workday integer,
+    p_alert_days integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can update tracking settings';
+    end if;
+    if p_visits_per_workday is null or p_visits_per_workday <= 0
+       or p_alert_days is null or p_alert_days <= 0 then
+        raise exception 'Tracking settings must be positive whole numbers';
+    end if;
+
+    update public.property_tracking_settings
+    set visits_per_workday = p_visits_per_workday,
+        alert_days = p_alert_days,
+        updated_by = auth.uid(),
+        updated_at = now()
+    where id is true;
+
+    return jsonb_build_object(
+        'visits_per_workday', p_visits_per_workday,
+        'alert_days', p_alert_days
+    );
+end;
+$$;
+
 create or replace function public.create_visit(
     p_property_number integer,
     p_visit_date date,
@@ -345,6 +726,7 @@ as $$
 declare
     new_visit_id uuid;
     property_archived_at timestamptz;
+    active_assignment_id uuid;
 begin
     if auth.uid() is null then
         raise exception 'An authenticated user is required';
@@ -353,10 +735,6 @@ begin
         raise exception 'The application is in maintenance mode';
     end if;
 
-    insert into public.properties (property_number, created_by, updated_by)
-    values (p_property_number, auth.uid(), auth.uid())
-    on conflict (property_number) do nothing;
-
     select archived_at
     into property_archived_at
     from public.properties
@@ -364,14 +742,26 @@ begin
     for update;
 
     if not found then
-        raise exception 'Property could not be created';
+        raise exception 'No tienes asignado el predio o el mismo no existe.';
     end if;
     if property_archived_at is not null then
         raise exception 'This property is archived';
     end if;
 
+    select id
+    into active_assignment_id
+    from public.property_assignments
+    where property_number = p_property_number
+      and assigned_to = auth.uid()
+      and closed_at is null
+    for update;
+    if not found then
+        raise exception 'This property is not assigned to your account';
+    end if;
+
     insert into public.visits (
         property_number,
+        assignment_id,
         visit_date,
         contact_name,
         cellphone,
@@ -381,6 +771,7 @@ begin
     )
     values (
         p_property_number,
+        active_assignment_id,
         coalesce(p_visit_date, current_date),
         p_contact_name,
         p_cellphone,
@@ -389,6 +780,14 @@ begin
         auth.uid()
     )
     returning id into new_visit_id;
+
+    update public.property_assignments
+    set completed_at = now(),
+        completed_by = auth.uid(),
+        closed_at = now(),
+        closed_by = auth.uid(),
+        close_reason = 'visited'
+    where id = active_assignment_id;
 
     return new_visit_id;
 end;
@@ -491,6 +890,8 @@ alter table public.profiles enable row level security;
 alter table public.maintenance_settings enable row level security;
 alter table public.properties enable row level security;
 alter table public.visits enable row level security;
+alter table public.property_assignments enable row level security;
+alter table public.property_tracking_settings enable row level security;
 alter table public.audit_log enable row level security;
 
 drop policy if exists "profiles_select_self_or_admin" on public.profiles;
@@ -504,7 +905,13 @@ create policy "properties_select_active_or_admin"
 on public.properties for select to authenticated
 using (
     public.application_access_allowed()
-    and (archived_at is null or public.is_admin())
+    and (
+        public.is_admin()
+        or (
+            archived_at is null
+            and public.has_active_property_assignment(property_number, auth.uid())
+        )
+    )
 );
 
 drop policy if exists "properties_update_admin" on public.properties;
@@ -522,12 +929,7 @@ using (
         public.is_admin()
         or (
             archived_at is null
-            and exists (
-                select 1
-                from public.properties
-                where property_number = visits.property_number
-                  and archived_at is null
-            )
+            and public.can_access_visit(property_number, assignment_id, created_by)
         )
     )
 );
@@ -540,14 +942,8 @@ using (
     and (
         public.is_admin()
         or (
-            created_by = auth.uid()
-            and archived_at is null
-            and exists (
-                select 1
-                from public.properties
-                where property_number = visits.property_number
-                  and archived_at is null
-            )
+            archived_at is null
+            and public.can_access_visit(property_number, assignment_id, created_by)
         )
     )
 )
@@ -556,27 +952,38 @@ with check (
     and (
         public.is_admin()
         or (
-            created_by = auth.uid()
-            and archived_at is null
-            and exists (
-                select 1
-                from public.properties
-                where property_number = visits.property_number
-                  and archived_at is null
-            )
+            archived_at is null
+            and public.can_access_visit(property_number, assignment_id, created_by)
         )
     )
 );
+
+drop policy if exists "property_assignments_select_admin_or_assignee"
+    on public.property_assignments;
+create policy "property_assignments_select_admin_or_assignee"
+on public.property_assignments for select to authenticated
+using (
+    public.application_access_allowed()
+    and (public.is_admin() or assigned_to = auth.uid())
+);
+
+drop policy if exists "property_tracking_settings_select_admin"
+    on public.property_tracking_settings;
+create policy "property_tracking_settings_select_admin"
+on public.property_tracking_settings for select to authenticated
+using (public.is_admin());
 
 drop policy if exists "audit_select_admin" on public.audit_log;
 create policy "audit_select_admin"
 on public.audit_log for select to authenticated
 using (public.is_admin());
 
-revoke all on public.profiles, public.properties, public.visits, public.audit_log
+revoke all on public.profiles, public.properties, public.visits, public.audit_log,
+    public.property_assignments, public.property_tracking_settings
     from public, anon, authenticated;
 revoke all on public.maintenance_settings from public, anon, authenticated;
-grant select on public.profiles, public.properties, public.audit_log
+grant select on public.profiles, public.properties, public.audit_log,
+    public.property_assignments, public.property_tracking_settings
     to authenticated;
 revoke select (paid_at, paid_by) on public.visits
     from public, anon, authenticated;
@@ -608,6 +1015,32 @@ grant execute on function public.application_access_allowed() to authenticated;
 revoke all on function public.create_visit(integer, date, text, text, text)
     from public, anon;
 grant execute on function public.create_visit(integer, date, text, text, text)
+    to authenticated;
+
+revoke all on function public.has_active_property_assignment(integer, uuid)
+    from public, anon;
+grant execute on function public.has_active_property_assignment(integer, uuid)
+    to authenticated;
+
+revoke all on function public.can_access_visit(integer, uuid, uuid)
+    from public, anon;
+grant execute on function public.can_access_visit(integer, uuid, uuid)
+    to authenticated;
+
+revoke all on function public.add_properties(text[]) from public, anon;
+grant execute on function public.add_properties(text[]) to authenticated;
+
+revoke all on function public.assign_properties(text[], uuid) from public, anon;
+grant execute on function public.assign_properties(text[], uuid) to authenticated;
+
+revoke all on function public.get_property_tracking_settings()
+    from public, anon;
+grant execute on function public.get_property_tracking_settings()
+    to authenticated;
+
+revoke all on function public.update_property_tracking_settings(integer, integer)
+    from public, anon;
+grant execute on function public.update_property_tracking_settings(integer, integer)
     to authenticated;
 
 revoke all on function public.mark_latest_visit_paid(integer)

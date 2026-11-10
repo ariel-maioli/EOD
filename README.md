@@ -5,7 +5,7 @@ Aplicación web para registrar y consultar visitas de mantenimiento a predios. L
 ## Configuración de Supabase
 
 1. Creá un proyecto Supabase.
-2. En **SQL Editor**, ejecutá el contenido completo de [`schema.sql`](./schema.sql). Es el esquema completo de EOD: crea o actualiza las tablas, índices, funciones, triggers, permisos y políticas RLS. Para una instalación nueva, ejecutalo antes de conectar la aplicación.
+2. En **SQL Editor**, ejecutá el contenido completo de [`schema.sql`](./schema.sql). Es el esquema completo de EOD: crea o actualiza las tablas, índices, funciones, triggers, permisos y políticas RLS, incluido el inventario y las asignaciones de predios. Para una instalación nueva, ejecutalo antes de conectar la aplicación.
 3. En **Authentication**, desactivá el registro público. Creá o invitá las cuentas de los técnicos desde **Authentication → Users**.
 4. Promové la cuenta administradora en **SQL Editor**, usando el correo de esa cuenta:
 
@@ -45,14 +45,17 @@ Usá la clave pública de Supabase, nunca la clave `service_role` ni una clave s
 
 ## Actualizar un proyecto Supabase existente
 
-Ejecutá el contenido completo de [`schema.sql`](./schema.sql) en **SQL Editor** para actualizar un proyecto EOD existente. El archivo incluye todas las definiciones actuales: nombres visibles, permisos de edición, seguimiento y privacidad de pagos, y bloqueo de fechas futuras. Crea o actualiza objetos y políticas; no borra visitas, predios, perfiles ni auditoría. Usá el script del proyecto correcto y no lo confundas con [`clear_production_visits.sql`](./clear_production_visits.sql), que sí es destructivo.
+Ejecutá el contenido completo de [`schema.sql`](./schema.sql) en **SQL Editor** para actualizar un proyecto EOD existente. El archivo incluye las definiciones actuales de inventario y asignaciones, permisos, pagos, auditoría y bloqueo de fechas futuras. Crea o actualiza objetos y políticas; no borra visitas, predios, perfiles ni auditoría. Las visitas antiguas no se asocian automáticamente a asignaciones nuevas. Si el proyecto solo tiene datos de prueba, podés limpiar EOD-dev después de aplicar el esquema y volver a generar los datos; seguí la sección [Generar datos de prueba](#generar-datos-de-prueba). No confundas el esquema con [`clear_production_visits.sql`](./clear_production_visits.sql), que sí es destructivo.
 
 No necesitás ejecutar scripts de migración separados: `schema.sql` es la fuente única del esquema vigente. Después, en **Table Editor → profiles**, completá `display_name` para mostrar nombres en lugar de correos; si queda vacío, la aplicación usa el correo como alternativa.
 
 ## Roles y uso de la aplicación
 
-- **Técnicos:** pueden registrar visitas y editar las visitas activas que registraron ellos mismos.
+- **Técnicos:** solo pueden registrar una visita para un predio existente que esté asignado actualmente a su usuario. Al guardar la visita, la asignación queda completada. Pueden editar sus propias visitas activas.
 - **Administrador:** puede editar visitas de cualquier técnico, archivar y restaurar visitas o predios, procesar y corregir pagos, consultar actividad y exportar CSV.
+- **Predios:** el admin dispone de un panel para agregar predios al inventario y, por separado, asignarlos a un técnico o a sí mismo. La carga acepta listas separadas por coma; informa los nuevos, existentes, repetidos, inválidos y errores. Solo se aceptan seis dígitos sin cero inicial.
+- **Asignaciones:** cada predio puede tener un único responsable a la vez. Reasignar cierra la asignación anterior y conserva su historial. Registrar una visita completa la asignación vigente; para visitar de nuevo, el admin debe asignarlo otra vez.
+- **Cobertura:** el panel muestra el inventario por estado y estima los días hábiles de cobertura por responsable. Los valores iniciales son 2 predios por día hábil y alerta a 15 días; el admin puede modificarlos. El cálculo usa lunes a viernes.
 - El administrador puede elegir un técnico en **Ver como** para revisar sus datos y la interfaz de técnico. Es una vista de solo lectura: no cambia la sesión ni los permisos reales del administrador.
 - La vista previa sirve para comprobar la presentación y los datos filtrados, no para verificar permisos reales de un técnico.
 - Los datos se vuelven a cargar al entrar en cada sección. Al actualizar la página, la sesión existente se restaura y se vuelven a cargar los datos.
@@ -81,6 +84,7 @@ Verificá que estés en el proyecto Supabase correcto al ejecutar ambos comandos
 ## Registrar visitas
 
 - El número de predio debe tener seis dígitos, comenzar entre 1 y 9, y no puede estar vacío.
+- El predio debe estar previamente cargado al inventario y asignado al usuario que registra la visita; la visita no crea predios automáticamente.
 - La fecha se propone inicialmente como hoy y no se permiten fechas futuras, tampoco al editar.
 - El contacto es obligatorio (hasta 50 caracteres); el celular es obligatorio y debe tener 10 dígitos, sin prefijo `0` ni `15`; las notas son opcionales (hasta 250 caracteres) y pueden incluir información útil para futuras visitas o auditorías.
 - Solo puede existir una visita por predio y fecha.
@@ -107,20 +111,20 @@ En la sección **Pagos**, las columnas **Predios abonados el [fecha]** y **Pendi
 
 Solo el administrador tiene acceso a esta sección. Muestra los eventos de auditoría de los últimos 30 días, con un máximo de 500 eventos por carga. Los nombres de usuario, predios, fechas y acciones se presentan en forma legible. La base conserva el historial sin purgarlo automáticamente, salvo cuando se ejecuta el script de limpieza.
 
-## Limpiar datos de producción
+## Limpiar datos (acción destructiva)
 
-[`clear_production_visits.sql`](./clear_production_visits.sql) es destructivo: elimina todas las visitas, todos los predios y todo el historial de auditoría; conserva las cuentas de Supabase Auth y `public.profiles`. El script bloquea las tablas durante la operación, desactiva temporalmente los triggers necesarios y utiliza una transacción para revertir los cambios si ocurre un error.
+[`clear_production_visits.sql`](./clear_production_visits.sql) es destructivo: elimina todas las visitas, las asignaciones, todos los predios y todo el historial de auditoría; conserva las cuentas de Supabase Auth, `public.profiles` y la configuración de cobertura. El script debe ejecutarse después de aplicar el esquema actualizado, bloquea las tablas durante la operación y utiliza una transacción para revertir los cambios si ocurre un error.
 
-Revisá el contenido y verificá que estás conectado al proyecto correcto antes de ejecutarlo manualmente en **Supabase → SQL Editor**. Hacé antes un respaldo de los datos que quieras conservar. **No lo ejecutes en un proyecto cuyos datos deban mantenerse.**
+Revisá el contenido y verificá que estás conectado al proyecto correcto antes de ejecutarlo manualmente en **Supabase → SQL Editor**. Para empezar con el nuevo flujo sin conservar los datos de prueba anteriores, ejecutalo únicamente en **EOD-dev**, después del esquema. Hacé antes un respaldo de los datos que quieras conservar. **No lo ejecutes en un proyecto cuyos datos deban mantenerse.**
 
 ## Generar datos de prueba
 
-[`seed_test_visits.sql`](./seed_test_visits.sql) crea 50 visitas por cada técnico existente y un predio por visita. Con los tres técnicos de EOD-dev, genera 150 visitas y predios. El administrador no recibe visitas; una cuenta admin solo se usa para registrar los pagos. Las visitas se distribuyen aleatoriamente de lunes a viernes, 10 por semana durante cinco semanas desde el 13 de abril de 2026. Las primeras 40 por técnico quedan abonadas en el viernes de su semana y las últimas 10 quedan impagas.
+[`seed_test_visits.sql`](./seed_test_visits.sql) crea 50 predios y visitas por cada técnico existente. Con los tres técnicos de EOD-dev, genera 150 predios, asignaciones completadas y visitas. El administrador no recibe visitas; una cuenta admin se usa para cargar predios, asignarlos y registrar los pagos. Las visitas se distribuyen aleatoriamente de lunes a viernes, 10 por semana durante las cinco semanas completas previas a la semana actual. Las primeras 40 por técnico quedan abonadas en el viernes de su semana y las últimas 10 quedan impagas.
 
-El script detecta las cuentas y roles directamente en el proyecto seleccionado. Solo se puede ejecutar si existe al menos un admin y un técnico, y las tablas `properties` y `visits` están vacías; está destinado al proyecto nuevo de pruebas, no a producción. Ejecutalo manualmente en **Supabase → SQL Editor** después de verificar que estás conectado a EOD-dev. La transacción se revierte si falla alguna validación.
+El script detecta las cuentas y roles directamente en el proyecto seleccionado. Solo se puede ejecutar si existe al menos un admin y un técnico, y las tablas `properties`, `visits` y `property_assignments` están vacías; está destinado al proyecto de pruebas, no a producción. Ejecutalo manualmente en **Supabase → SQL Editor** después de aplicar el esquema actualizado y verificar que estás conectado a EOD-dev. La transacción se revierte si falla alguna validación.
 
-[`seed_current_week_visits.sql`](./seed_current_week_visits.sql) agrega datos para la semana actual sin borrar los registros existentes. Crea dos visitas por técnico por cada día hábil transcurrido de la semana (lunes a viernes), con fechas de Argentina y predios de prueba disponibles. Si ya pasó el viernes a las 18:00, marca ocho visitas por técnico como abonadas ese viernes y deja las dos restantes pendientes. El script evita duplicar una carga de prueba de la misma semana y revierte todo si falla una validación. Ejecutalo manualmente en **Supabase → SQL Editor** después de confirmar que estás en EOD-dev; no lo uses en producción.
+[`seed_current_week_visits.sql`](./seed_current_week_visits.sql) agrega predios, asignaciones y visitas de prueba para la semana actual sin borrar los registros existentes. Crea dos visitas por técnico por cada día hábil transcurrido de la semana (lunes a viernes), con fechas de Argentina y números de predio disponibles. Si ya pasó el viernes a las 18:00, marca ocho visitas por técnico como abonadas ese viernes. El script evita duplicar una carga de prueba de la misma semana y revierte todo si falla una validación. Ejecutalo manualmente en **Supabase → SQL Editor** después de confirmar que estás en EOD-dev; no lo uses en producción.
 
 ## Publicar con GitHub Pages
 
-En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí la rama `main` y la carpeta `/ (root)`, y guardá. GitHub Pages publica los archivos del repositorio; el acceso a los datos de la aplicación requiere iniciar sesión. Después de cambiar los archivos, publicá los cambios en el repositorio para que aparezcan en el sitio.
+En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí la rama `main` y la carpeta `/ (root)`, y guardá. GitHub Pages publica los archivos del repositorio; el acceso a los datos de la aplicación requiere iniciar sesión. Después de cambiar los archivos, publicá los cambios en el repositorio para que aparezcan en el sitio. Al publicar una versión nueva, actualizá el número de versión en `index.html`, `app.js` y `version.json`; así el navegador descarga los archivos actualizados y las sesiones abiertas en la pantalla de ingreso pueden refrescarse automáticamente.

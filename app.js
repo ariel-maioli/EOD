@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  const APP_VERSION = "20261109.1";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -11,7 +12,9 @@
     visits: [],
     paymentDetails: new Map(),
     properties: [],
+    assignments: [],
     profiles: [],
+    trackingSettings: { visits_per_workday: 2, alert_days: 15 },
     audit: [],
     editingId: null,
     viewAsTechnicianId: "",
@@ -79,6 +82,29 @@
       button.disabled = busy;
     });
     byId("view-as-technician").disabled = busy;
+  }
+
+  async function checkForAppUpdate() {
+    if (byId("login-panel").hidden || document.visibilityState !== "visible") return;
+    if (byId("login-password").value || byId("login-form").contains(document.activeElement)) return;
+
+    try {
+      const versionUrl = new URL("version.json", window.location.href);
+      versionUrl.searchParams.set("check", String(Date.now()));
+      const response = await fetch(versionUrl, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Version check returned HTTP ${response.status}`);
+      const latest = await response.json();
+      if (typeof latest.version !== "string") {
+        throw new Error("The version file does not contain a valid version");
+      }
+      if (latest.version !== APP_VERSION) {
+        const pageUrl = new URL(window.location.href);
+        pageUrl.searchParams.set("eod-version", latest.version);
+        window.location.replace(pageUrl.href);
+      }
+    } catch (error) {
+      console.warn("No se pudo comprobar si hay una actualización de EOD.", error);
+    }
   }
 
   function escapeHtml(value) {
@@ -185,6 +211,26 @@
 
   function propertyFor(number) {
     return state.properties.find((property) => property.property_number === number);
+  }
+
+  function parsePropertyList(value) {
+    return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+  }
+
+  async function fetchAllRows(table, orderColumn) {
+    const rows = [];
+    const pageSize = 500;
+    let offset = 0;
+    while (true) {
+      const { data, error } = await state.client.from(table)
+        .select("*")
+        .order(orderColumn, { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) return rows;
+      offset += pageSize;
+    }
   }
 
   function isAdmin() {
@@ -309,7 +355,9 @@
     state.visits = [];
     state.paymentDetails = new Map();
     state.properties = [];
+    state.assignments = [];
     state.profiles = [];
+    state.trackingSettings = { visits_per_workday: 2, alert_days: 15 };
     state.audit = [];
     state.editingId = null;
   }
@@ -378,20 +426,24 @@
   }
 
   async function loadData() {
-    const [paymentsResult, propertiesResult, profilesResult] = await Promise.all([
+    const [paymentsResult, properties, assignments, profilesResult, settingsResult] = await Promise.all([
       state.client.rpc("get_visible_visit_payments"),
-      state.client.from("properties").select("*"),
-      state.client.from("profiles").select("id,email,display_name,role")
+      fetchAllRows("properties", "property_number"),
+      fetchAllRows("property_assignments", "assigned_at"),
+      state.client.from("profiles").select("id,email,display_name,role"),
+      isAdmin() ? state.client.rpc("get_property_tracking_settings") : Promise.resolve({ data: null, error: null })
     ]);
 
-    const failure = [paymentsResult, propertiesResult, profilesResult].find((result) => result.error);
+    const failure = [paymentsResult, profilesResult, settingsResult].find((result) => result.error);
     if (failure) throw failure.error;
 
     state.paymentDetails = new Map(
       (paymentsResult.data || []).map((payment) => [payment.visit_id, payment])
     );
-    state.properties = propertiesResult.data || [];
+    state.properties = properties;
+    state.assignments = assignments;
     state.profiles = profilesResult.data || [];
+    if (settingsResult.data) state.trackingSettings = settingsResult.data;
     renderViewAsSelector();
     configureRoleExperience();
 
@@ -426,6 +478,7 @@
     renderVisits();
     renderPayments();
     renderActivity();
+    renderPropertiesPanel();
   }
 
   function renderUserFilter() {
@@ -476,6 +529,7 @@
       : isAdmin() ? "Administrador" : "Técnico";
     byId("welcome-title").textContent = `${greetingForCurrentTime()}, ${profileName(experienceProfile?.id || state.user?.id)}`;
     byId("activity-tab").hidden = !adminFeaturesEnabled;
+    byId("properties-tab").hidden = !adminFeaturesEnabled;
     byId("export-actions").hidden = !adminFeaturesEnabled;
     byId("payments-form").hidden = !adminFeaturesEnabled;
     byId("filter-user-field").hidden = !adminFeaturesEnabled;
@@ -770,6 +824,7 @@
       : null;
     const propertyNumber = newData.property_number ?? oldData.property_number ?? visit?.property_number;
     if (entry.entity_type === "property") return `Predio ${propertyNumber ?? entry.entity_id}`;
+    if (entry.entity_type === "assignment") return `Asignación del predio ${propertyNumber ?? entry.entity_id}`;
     if (propertyNumber == null) return "Visita";
     const visitDate = newData.visit_date ?? oldData.visit_date ?? visit?.visit_date;
     return `Visita del predio ${propertyNumber}${visitDate ? ` · ${formatDate(visitDate)}` : ""}`;
@@ -801,6 +856,245 @@
         <p class="activity-change">${escapeHtml(changedFields(entry))}</p>
       </article>
     `).join("");
+  }
+
+  function renderOperationResult(containerId, result, labels) {
+    const container = byId(containerId);
+    const rows = Object.entries(labels).flatMap(([key, label]) => {
+      const values = result[key] || [];
+      if (!values.length) return [];
+      return [`<li><strong>${escapeHtml(label)} (${values.length}):</strong> ${values.map((item) => {
+        if (typeof item === "object" && item !== null) {
+          return `${escapeHtml(item.property)}: ${escapeHtml(item.message)}`;
+        }
+        return escapeHtml(item);
+      }).join(", ")}</li>`];
+    });
+    container.innerHTML = rows.length
+      ? `<ul class="operation-summary">${rows.join("")}</ul>`
+      : "";
+  }
+
+  function renderPropertiesPanel() {
+    if (!canUseAdminFeatures()) return;
+
+    const assignee = byId("property-assignee");
+    const selectedAssignee = assignee.value || state.profile?.id || "";
+    assignee.innerHTML = state.profiles
+      .filter((profile) => profile.role === "admin" || profile.role === "technician")
+      .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}${profile.role === "admin" ? " · Admin" : ""}</option>`)
+      .join("");
+    if (state.profiles.some((profile) => profile.id === selectedAssignee)) {
+      assignee.value = selectedAssignee;
+    }
+
+    const rate = Number(state.trackingSettings.visits_per_workday) || 2;
+    const alertDays = Number(state.trackingSettings.alert_days) || 15;
+    byId("visits-per-workday").value = String(rate);
+    byId("property-alert-days").value = String(alertDays);
+
+    const orderedAssignments = [...state.assignments]
+      .sort((left, right) => left.assigned_at.localeCompare(right.assigned_at));
+    const latestAssignment = new Map();
+    orderedAssignments.forEach((assignment) => latestAssignment.set(assignment.property_number, assignment));
+    const propertiesByNumber = new Map(
+      state.properties.map((property) => [property.property_number, property])
+    );
+    const activeAssignments = state.assignments.filter((assignment) =>
+      !assignment.closed_at && !propertiesByNumber.get(assignment.property_number)?.archived_at
+    );
+    const pendingByUser = new Map();
+    state.assignments.forEach((assignment) => {
+      if (!pendingByUser.has(assignment.assigned_to)) pendingByUser.set(assignment.assigned_to, 0);
+    });
+    activeAssignments.forEach((assignment) => {
+      pendingByUser.set(assignment.assigned_to, (pendingByUser.get(assignment.assigned_to) || 0) + 1);
+    });
+
+    const total = state.properties.length;
+    const archived = state.properties.filter((property) => property.archived_at).length;
+    const pending = activeAssignments.length;
+    const visited = state.properties.filter((property) =>
+      !property.archived_at && latestAssignment.get(property.property_number)?.completed_at
+    ).length;
+    const unassigned = state.properties.filter((property) =>
+      !property.archived_at && !latestAssignment.has(property.property_number)
+    ).length;
+    byId("property-summary").innerHTML = [
+      ["En inventario", total],
+      ["Pendientes", pending],
+      ["Visitados", visited],
+      ["Sin asignar", unassigned],
+      ["Archivados", archived]
+    ].map(([label, value]) => `
+      <div class="property-stat"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>
+    `).join("");
+
+    const alerts = [...pendingByUser.entries()]
+      .map(([userId, count]) => ({ userId, count, days: Math.ceil(count / rate) }))
+      .filter((item) => item.days <= alertDays)
+      .sort((left, right) => left.days - right.days || left.count - right.count);
+    byId("property-alerts").innerHTML = alerts.length
+      ? alerts.map((item) => `
+        <article class="property-alert">
+          <strong>${escapeHtml(profileName(item.userId))}</strong>
+          <span>${item.count
+            ? `${item.count} ${item.count === 1 ? "predio pendiente" : "predios pendientes"}`
+            : "Sin predios pendientes"}</span>
+          <span>${item.days
+            ? `Cobertura estimada: ${item.days} ${item.days === 1 ? "día hábil" : "días hábiles"}`
+            : "Cobertura agotada"}</span>
+        </article>
+      `).join("")
+      : '<div class="empty-state">No hay responsables dentro del umbral de alerta configurado.</div>';
+
+    const filter = byId("property-status-filter").value;
+    const inventory = state.properties.filter((property) => {
+      if (filter === "archived") return Boolean(property.archived_at);
+      if (property.archived_at) return false;
+      const assignment = latestAssignment.get(property.property_number);
+      if (filter === "pending") return Boolean(assignment && !assignment.closed_at);
+      if (filter === "visited") return Boolean(assignment?.completed_at);
+      if (filter === "unassigned") return !assignment;
+      return true;
+    }).sort((left, right) => left.property_number - right.property_number);
+
+    byId("property-inventory").innerHTML = inventory.length
+      ? inventory.map((property) => {
+        const assignment = latestAssignment.get(property.property_number);
+        const status = property.archived_at
+          ? "Archivado"
+          : assignment && !assignment.closed_at ? "Pendiente"
+            : assignment?.completed_at ? "Visitado" : "Sin asignar";
+        const responsible = assignment ? profileName(assignment.assigned_to) : "—";
+        return `
+          <article class="property-inventory-row">
+            <strong>${escapeHtml(property.property_number)}</strong>
+            <span class="property-status status-${status.toLocaleLowerCase("es").replaceAll(" ", "-")}">${escapeHtml(status)}</span>
+            <span>${escapeHtml(responsible)}</span>
+            <span>${assignment ? escapeHtml(formatDate(assignment.assigned_at)) : "—"}</span>
+          </article>
+        `;
+      }).join("")
+      : '<div class="empty-state">No hay predios para este filtro.</div>';
+  }
+
+  async function addProperties(event) {
+    event.preventDefault();
+    if (!canUseAdminFeatures() || state.busy) return;
+    const numbers = parsePropertyList(byId("property-add-list").value);
+    if (!numbers.length) {
+      showNotice("Ingresá al menos un número de predio.", true);
+      return;
+    }
+
+    byId("property-add-result").innerHTML = "";
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.rpc("add_properties", {
+        p_property_numbers: numbers
+      });
+      if (error) throw error;
+      renderOperationResult("property-add-result", data, {
+        added: "Agregados",
+        existing: "Ya existían",
+        duplicates: "Repetidos en la lista",
+        invalid: "Formato inválido",
+        errors: "Errores"
+      });
+      await loadData();
+      byId("property-add-list").value = "";
+      const count = data?.added?.length || 0;
+      showNotice(`Proceso completado: ${count} ${count === 1 ? "predio agregado" : "predios agregados"}.`);
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignProperties(event) {
+    event.preventDefault();
+    if (!canUseAdminFeatures() || state.busy) return;
+    const numbers = parsePropertyList(byId("property-assign-list").value);
+    if (!numbers.length) {
+      showNotice("Ingresá al menos un número de predio.", true);
+      return;
+    }
+    const targetAssignee = byId("property-assignee").value;
+    const assignmentsByProperty = new Map(
+      state.assignments
+        .filter((assignment) => !assignment.closed_at)
+        .map((assignment) => [String(assignment.property_number), assignment])
+    );
+    const toReassign = [...new Set(numbers)].flatMap((number) => {
+      const current = assignmentsByProperty.get(number);
+      return current && current.assigned_to !== targetAssignee
+        ? [`${number} (${profileName(current.assigned_to)})`]
+        : [];
+    });
+    if (toReassign.length && !window.confirm(
+      `Estos predios ya tienen otro responsable: ${toReassign.join(", ")}. ` +
+      "Si continuás, se cerrará la asignación actual y se conservará en el historial. ¿Querés continuar?"
+    )) return;
+
+    byId("property-assign-result").innerHTML = "";
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.rpc("assign_properties", {
+        p_property_numbers: numbers,
+        p_assigned_to: targetAssignee
+      });
+      if (error) throw error;
+      renderOperationResult("property-assign-result", data, {
+        assigned: "Asignados",
+        reassigned: "Reasignados",
+        already_assigned: "Ya estaban asignados a esa persona",
+        not_found: "No existen o están archivados",
+        duplicates: "Repetidos en la lista",
+        invalid: "Formato inválido",
+        errors: "Errores"
+      });
+      await loadData();
+      byId("property-assign-list").value = "";
+      const count = (data?.assigned?.length || 0) + (data?.reassigned?.length || 0);
+      showNotice(`Proceso completado: ${count} ${count === 1 ? "predio asignado" : "predios asignados"}.`);
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePropertyTrackingSettings(event) {
+    event.preventDefault();
+    if (!canUseAdminFeatures() || state.busy) return;
+    const visitsPerWorkday = Number(byId("visits-per-workday").value);
+    const alertDays = Number(byId("property-alert-days").value);
+    if (!Number.isInteger(visitsPerWorkday) || visitsPerWorkday < 1
+        || !Number.isInteger(alertDays) || alertDays < 1) {
+      showNotice("Los parámetros deben ser números enteros mayores que cero.", true);
+      return;
+    }
+
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.rpc("update_property_tracking_settings", {
+        p_visits_per_workday: visitsPerWorkday,
+        p_alert_days: alertDays
+      });
+      if (error) throw error;
+      state.trackingSettings = data;
+      await loadData();
+      showNotice("Los parámetros de cobertura se guardaron correctamente.");
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openApplication(user) {
@@ -937,7 +1231,10 @@
   }
 
   function humanError(error) {
-    const message = String(error?.message || "");
+    const message = [error?.message, error?.details, error?.hint]
+      .filter(Boolean)
+      .join(" ");
+    const normalizedMessage = message.toLocaleLowerCase("en");
     if (message.includes("visits_property_number_visit_date_key")) {
       return "Ya existe una visita para ese predio en esa fecha. Buscala y editá el registro existente.";
     }
@@ -952,6 +1249,16 @@
     }
     if (message.includes("This property is archived")) {
       return "El predio está archivado. Pedile al administrador que lo restaure antes de cargar una visita.";
+    }
+    if (message.includes("This property is not assigned to your account")) {
+      return "Ese predio no está asignado a tu usuario. Pedile al administrador que lo asigne antes de registrar la visita.";
+    }
+    if (
+      normalizedMessage.includes("property could not be created")
+      || normalizedMessage.includes("property does not exist")
+      || normalizedMessage.includes("property not found")
+    ) {
+      return "No tienes asignado el predio o el mismo no existe.";
     }
     if (message.includes("Invalid login credentials")) {
       return "El correo o la contraseña no son correctos.";
@@ -1191,6 +1498,10 @@
 
     byId("visit-form").addEventListener("submit", saveVisit);
     byId("payments-form").addEventListener("submit", processPayments);
+    byId("property-add-form").addEventListener("submit", addProperties);
+    byId("property-assign-form").addEventListener("submit", assignProperties);
+    byId("property-settings-form").addEventListener("submit", savePropertyTrackingSettings);
+    byId("property-status-filter").addEventListener("change", renderPropertiesPanel);
     byId("sign-out").addEventListener("click", async () => {
       setBusy(true);
       try {
@@ -1198,6 +1509,7 @@
         if (error) throw error;
         showLoggedOut();
         clearNotice();
+        await checkForAppUpdate();
       } catch (error) {
         showNotice(humanError(error), true);
       } finally {
@@ -1260,6 +1572,8 @@
 
   async function start() {
     bindEvents();
+    window.setInterval(checkForAppUpdate, 30000);
+    document.addEventListener("visibilitychange", checkForAppUpdate);
     const developmentMode = new URLSearchParams(window.location.search).get("env") === "dev";
     if (developmentMode) {
       config = null;

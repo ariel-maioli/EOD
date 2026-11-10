@@ -7,6 +7,7 @@ begin;
 
 lock table public.properties in share row exclusive mode;
 lock table public.visits in share row exclusive mode;
+lock table public.property_assignments in share row exclusive mode;
 
 create temporary table eod_week_participants (
     participant_order integer primary key,
@@ -143,6 +144,7 @@ declare
     participant record;
     admin_id uuid;
     expected_visits integer;
+    seed_visit record;
 begin
     select id
     into admin_id
@@ -161,13 +163,41 @@ begin
         raise exception 'Not enough unused test property numbers; no records were added';
     end if;
 
+    perform set_config('request.jwt.claim.sub', admin_id::text, true);
+    perform set_config('request.jwt.claim.role', 'authenticated', true);
+    perform set_config(
+        'request.jwt.claims',
+        jsonb_build_object('sub', admin_id::text, 'role', 'authenticated')::text,
+        true
+    );
+    insert into public.properties (property_number, created_by, updated_by)
+    select property_number, admin_id, admin_id
+    from pg_temp.eod_week_visits;
+
     for participant in
         select participant_id
         from pg_temp.eod_week_participants
         order by participant_order
     loop
-        perform set_config('request.jwt.claim.sub', participant.participant_id::text, true);
+        perform set_config('request.jwt.claim.sub', admin_id::text, true);
         perform set_config('request.jwt.claim.role', 'authenticated', true);
+        perform set_config(
+            'request.jwt.claims',
+            jsonb_build_object(
+                'sub', admin_id::text,
+                'role', 'authenticated'
+            )::text,
+            true
+        );
+
+        insert into public.property_assignments (
+            property_number, assigned_to, assigned_by
+        )
+        select property_number, participant.participant_id, admin_id
+        from pg_temp.eod_week_visits
+        where participant_id = participant.participant_id;
+
+        perform set_config('request.jwt.claim.sub', participant.participant_id::text, true);
         perform set_config(
             'request.jwt.claims',
             jsonb_build_object(
@@ -176,31 +206,19 @@ begin
             )::text,
             true
         );
-
-        insert into public.properties (property_number, created_by, updated_by)
-        select property_number, participant.participant_id, participant.participant_id
-        from pg_temp.eod_week_visits
-        where participant_id = participant.participant_id;
-
-        insert into public.visits (
-            property_number,
-            visit_date,
-            contact_name,
-            cellphone,
-            notes,
-            created_by,
-            updated_by
-        )
-        select
-            property_number,
-            visit_date,
-            contact_name,
-            cellphone,
-            notes,
-            participant.participant_id,
-            participant.participant_id
-        from pg_temp.eod_week_visits
-        where participant_id = participant.participant_id;
+        for seed_visit in
+            select *
+            from pg_temp.eod_week_visits
+            where participant_id = participant.participant_id
+        loop
+            perform public.create_visit(
+                seed_visit.property_number,
+                seed_visit.visit_date,
+                seed_visit.contact_name,
+                seed_visit.cellphone,
+                seed_visit.notes
+            );
+        end loop;
     end loop;
 
     if (select payments_ready from pg_temp.eod_week_config) then
@@ -255,6 +273,13 @@ begin
              on seed.property_number = visit.property_number
            where visit.paid_at is not null
        ) <> expected_paid_visits
+       or (
+           select count(*)
+           from public.property_assignments as assignment
+           join pg_temp.eod_week_visits as seed
+             on seed.property_number = assignment.property_number
+           where assignment.completed_at is not null
+       ) <> expected_visits
        or exists (
            select 1
            from public.visits as visit
