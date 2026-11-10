@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.17";
+  const APP_VERSION = "20261110.18";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -23,7 +23,8 @@
     noticeTimer: null,
     visitSuccessTimer: null,
     searchRequestId: 0,
-    searchTimer: null
+    searchTimer: null,
+    searchAllVisits: false
   };
 
   function showNotice(message, isError = false) {
@@ -477,6 +478,7 @@
     state.profile = null;
     state.activeView = null;
     state.viewAsTechnicianId = "";
+    state.searchAllVisits = false;
     state.visits = [];
     state.paymentDetails = new Map();
     state.properties = [];
@@ -519,7 +521,7 @@
 
   function searchUsesAllVisits() {
     return Boolean(
-      byId("search-query").value.trim()
+      state.searchAllVisits || byId("search-query").value.trim()
       || byId("filter-from").value
       || byId("filter-to").value
       || (canUseAdminFeatures() && byId("filter-user").value)
@@ -1944,9 +1946,13 @@
     });
 
     ["search-query", "filter-from", "filter-to", "filter-user", "filter-status"].forEach((id) => {
-      byId(id).addEventListener(id === "search-query" ? "input" : "change", refreshSearchVisits);
+      byId(id).addEventListener(id === "search-query" ? "input" : "change", () => {
+        state.searchAllVisits = false;
+        refreshSearchVisits();
+      });
     });
     byId("clear-search-filters").addEventListener("click", () => {
+      state.searchAllVisits = true;
       ["search-query", "filter-from", "filter-to", "filter-user"].forEach((id) => {
         byId(id).value = "";
       });
