@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.16">
+  <link rel="stylesheet" href="styles.css?v=20261110.17">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.16" defer></script>
+  <script src="app.js?v=20261110.17" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -121,7 +121,10 @@
               <div class="eyebrow">Consulta</div>
               <h2>Buscar visitas</h2>
             </div>
-            <span id="result-count" class="muted"></span>
+            <div class="search-heading-actions">
+              <span id="result-count" class="muted"></span>
+              <button id="clear-search-filters" class="button button-small button-quiet" type="button">Limpiar filtros</button>
+            </div>
           </div>
           <div class="filters">
             <label class="field field-search" for="search-query">
@@ -185,6 +188,26 @@
         </div>
 
         <div class="card">
+          <div class="eyebrow">Seguimiento</div>
+          <div class="section-heading property-inventory-heading">
+            <h2>Inventario <span id="property-inventory-total"></span></h2>
+            <div class="property-inventory-filters">
+              <select id="property-status-filter" aria-label="Filtrar por estado">
+                <option value="all">Todos</option>
+                <option value="unassigned">Sin asignar</option>
+                <option value="pending" selected>Pendientes</option>
+                <option value="visited">Visitados</option>
+                <option value="archived">Archivados</option>
+              </select>
+              <select id="property-technician-filter" aria-label="Filtrar por técnico o administrador">
+                <option value="">Todos los responsables</option>
+              </select>
+            </div>
+          </div>
+          <div id="property-inventory" class="property-inventory" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
           <div class="eyebrow">Proceso 1</div>
           <h2>Agregar al inventario</h2>
           <form id="property-add-form" class="stack property-form">
@@ -236,26 +259,6 @@
             </div>
           </form>
           <div id="visit-import-result" class="property-operation-result" aria-live="polite"></div>
-        </div>
-
-        <div class="card">
-          <div class="eyebrow">Seguimiento</div>
-          <div class="section-heading property-inventory-heading">
-            <h2>Inventario <span id="property-inventory-total"></span></h2>
-            <div class="property-inventory-filters">
-              <select id="property-status-filter" aria-label="Filtrar por estado">
-                <option value="all">Todos</option>
-                <option value="unassigned">Sin asignar</option>
-                <option value="pending" selected>Pendientes</option>
-                <option value="visited">Visitados</option>
-                <option value="archived">Archivados</option>
-              </select>
-              <select id="property-technician-filter" aria-label="Filtrar por técnico o administrador">
-                <option value="">Todos los responsables</option>
-              </select>
-            </div>
-          </div>
-          <div id="property-inventory" class="property-inventory" aria-live="polite"></div>
         </div>
 
         <div class="card">

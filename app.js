@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.16";
+  const APP_VERSION = "20261110.17";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -1945,6 +1945,13 @@
 
     ["search-query", "filter-from", "filter-to", "filter-user", "filter-status"].forEach((id) => {
       byId(id).addEventListener(id === "search-query" ? "input" : "change", refreshSearchVisits);
+    });
+    byId("clear-search-filters").addEventListener("click", () => {
+      ["search-query", "filter-from", "filter-to", "filter-user"].forEach((id) => {
+        byId(id).value = "";
+      });
+      byId("filter-status").value = canUseAdminFeatures() ? "all" : "active";
+      refreshSearchVisits();
     });
 
     byId("notes").addEventListener("input", (event) => {

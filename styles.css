@@ -60,6 +60,7 @@ body {
 .message-card { max-width: 650px; margin: 10vh auto; }
 .maintenance-banner { border-color: #e6c88b; background: #fffaf0; }
 .page-heading, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.search-heading-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 10px; min-width: 0; }
 .page-heading { margin-bottom: 24px; }
 h1, h2, p { margin-top: 0; }
 h1 { margin-bottom: 8px; font-size: clamp(1.7rem, 5vw, 2.2rem); letter-spacing: -.03em; }
