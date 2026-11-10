@@ -1091,6 +1091,9 @@ begin
     if auth.uid() is null or not public.is_admin() then
         raise exception 'Only an admin can mark visits as paid';
     end if;
+    if not public.application_access_allowed() then
+        raise exception 'The application is in maintenance mode';
+    end if;
 
     select archived_at
     into property_archived_at
@@ -1110,14 +1113,24 @@ begin
     from public.visits
     where property_number = p_property_number
       and archived_at is null
+      and paid_at is null
     order by visit_date desc, created_at desc
     limit 1
     for update;
 
     if not found then
-        return jsonb_build_object('status', 'no_visit');
-    end if;
-    if target_visit.paid_at is not null then
+        select id, visit_date, paid_at
+        into target_visit
+        from public.visits
+        where property_number = p_property_number
+          and archived_at is null
+        order by visit_date desc, created_at desc
+        limit 1
+        for update;
+
+        if not found then
+            return jsonb_build_object('status', 'no_visit');
+        end if;
         return jsonb_build_object(
             'status', 'already_paid',
             'visit_date', target_visit.visit_date,
@@ -1135,6 +1148,77 @@ begin
         'visit_id', target_visit.id,
         'visit_date', target_visit.visit_date,
         'paid_at', payment_time
+    );
+end;
+$$;
+
+create or replace function public.mark_visit_paid(p_visit_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_property_number integer;
+    v_property_archived_at timestamptz;
+    v_visit record;
+    v_payment_time timestamptz;
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can mark visits as paid';
+    end if;
+    if not public.application_access_allowed() then
+        raise exception 'The application is in maintenance mode';
+    end if;
+
+    select property_number
+    into v_property_number
+    from public.visits
+    where id = p_visit_id;
+    if not found then
+        return jsonb_build_object('status', 'not_found');
+    end if;
+
+    select archived_at
+    into v_property_archived_at
+    from public.properties
+    where property_number = v_property_number
+    for update;
+    if not found then
+        return jsonb_build_object('status', 'not_found');
+    end if;
+    if v_property_archived_at is not null then
+        return jsonb_build_object('status', 'property_archived');
+    end if;
+
+    select id, visit_date, paid_at, archived_at
+    into v_visit
+    from public.visits
+    where id = p_visit_id
+    for update;
+    if not found then
+        return jsonb_build_object('status', 'not_found');
+    end if;
+    if v_visit.archived_at is not null then
+        return jsonb_build_object('status', 'visit_archived');
+    end if;
+    if v_visit.paid_at is not null then
+        return jsonb_build_object(
+            'status', 'already_paid',
+            'paid_at', v_visit.paid_at
+        );
+    end if;
+
+    update public.visits
+    set paid_at = now()
+    where id = p_visit_id
+    returning paid_at into v_payment_time;
+
+    return jsonb_build_object(
+        'status', 'marked',
+        'visit_id', p_visit_id,
+        'visit_date', v_visit.visit_date,
+        'paid_at', v_payment_time
     );
 end;
 $$;
@@ -1270,23 +1354,29 @@ begin
         from public.visits
         where property_number = v_property_number
           and archived_at is null
+          and paid_at is null
         order by visit_date desc, created_at desc
         limit 1
         for update;
         if not found then
-            v_no_visit := v_no_visit || jsonb_build_array(jsonb_build_object(
-                'row', v_row_number,
-                'property', v_property_number,
-                'reason', 'El predio no tiene visitas activas.'
-            ));
-            continue;
-        end if;
-        if v_paid_at is not null then
-            v_already_paid := v_already_paid || jsonb_build_array(jsonb_build_object(
-                'row', v_row_number,
-                'property', v_property_number,
-                'reason', 'La visita más reciente ya figura abonada.'
-            ));
+            if exists (
+                select 1
+                from public.visits
+                where property_number = v_property_number
+                  and archived_at is null
+            ) then
+                v_already_paid := v_already_paid || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', 'No hay visitas pendientes de pago para este predio.'
+                ));
+            else
+                v_no_visit := v_no_visit || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', 'El predio no tiene visitas activas.'
+                ));
+            end if;
             continue;
         end if;
 
@@ -1520,6 +1610,9 @@ revoke all on function public.mark_latest_visit_paid(integer)
 grant execute on function public.mark_latest_visit_paid(integer)
     to authenticated;
 
+revoke all on function public.mark_visit_paid(uuid) from public, anon;
+grant execute on function public.mark_visit_paid(uuid) to authenticated;
+
 revoke all on function public.import_payments(jsonb) from public, anon;
 grant execute on function public.import_payments(jsonb) to authenticated;
 
@@ -1527,3 +1620,5 @@ revoke all on function public.get_visible_visit_payments()
     from public, anon;
 grant execute on function public.get_visible_visit_payments()
     to authenticated;
+
+notify pgrst, 'reload schema';

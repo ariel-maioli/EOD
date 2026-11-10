@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.5";
+  const APP_VERSION = "20261110.6";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -662,7 +662,7 @@
     byId("filter-user-field").hidden = !adminFeaturesEnabled;
     byId("filter-status-field").hidden = !adminFeaturesEnabled;
     byId("payments-info").textContent = adminFeaturesEnabled
-      ? "Ingresar números de predio separados por coma. Se marcará la visita activa más reciente de cada uno."
+      ? "Ingresar números de predio separados por coma. Se marcará la visita pendiente de pago más reciente de cada uno. También podés marcar una visita específica desde la lista de pendientes."
       : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
 
     byId("visit-form-title").textContent = technicianPreview
@@ -867,24 +867,14 @@
       `).join("");
     }
 
-    const latestActiveVisitByProperty = new Map();
-    state.visits
+    const pendingVisits = state.visits
       .filter((visit) => {
         const property = propertyFor(visit.property_number);
         return !visit.archived_at
-          && (!property || !property.archived_at);
+          && !property?.archived_at
+          && !visit.paid_at
+          && (canUseAdminFeatures() || visit.created_by === currentDataUserId);
       })
-      .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
-        || b.created_at.localeCompare(a.created_at))
-      .forEach((visit) => {
-        if (!latestActiveVisitByProperty.has(visit.property_number)) {
-          latestActiveVisitByProperty.set(visit.property_number, visit);
-        }
-      });
-
-    const pendingVisits = [...latestActiveVisitByProperty.values()]
-      .filter((visit) => !visit.paid_at
-        && (canUseAdminFeatures() || visit.created_by === currentDataUserId))
       .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at));
     const pendingContainer = byId("pending-payments-list");
@@ -900,6 +890,7 @@
         <strong>${escapeHtml(visit.property_number)}</strong>
         <span class="payment-date">${escapeHtml(formatDate(visit.visit_date))}</span>
         ${canUseAdminFeatures() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
+        ${canUseAdminFeatures() ? `<button class="button button-small button-secondary" type="button" data-action="mark-payment" data-id="${escapeHtml(visit.id)}">Marcar abonada</button>` : ""}
       </article>
     `).join("");
   }
@@ -1626,7 +1617,7 @@
     if (status === "property_archived") return `El predio ${propertyNumber} está archivado.`;
     if (status === "no_visit") return `El predio ${propertyNumber} no tiene visitas activas.`;
     if (status === "already_paid") {
-      return `La visita más reciente del predio ${propertyNumber} ya figura abonada el ${formatPaymentDate(result.paid_at)}.`;
+      return `El predio ${propertyNumber} no tiene visitas pendientes de pago${result?.paid_at ? `; la más reciente ya figura abonada el ${formatPaymentDate(result.paid_at)}` : ""}.`;
     }
     return `No se pudo procesar el predio ${propertyNumber}.`;
   }
@@ -1704,7 +1695,41 @@
     const stopMessage = stoppedAt
       ? ` Proceso detenido en ${stoppedAt}; los pagos anteriores no se revierten.`
       : "";
-    showNotice(`Proceso finalizado: ${markedCount} visita(s) marcada(s) como abonadas.${stopMessage}`);
+    showNotice(`Proceso finalizado: ${markedCount} visita(s) pendiente(s) marcada(s) como abonada(s).${stopMessage}`);
+  }
+
+  async function markVisitPaid(visitId) {
+    if (!canUseAdminFeatures() || state.busy) return;
+    const visit = state.visits.find((item) => item.id === visitId);
+    if (!visit || visit.paid_at) return;
+    if (!window.confirm(
+      `¿Querés marcar como abonada la visita del predio ${visit.property_number} ` +
+      `del ${formatDate(visit.visit_date)}?`
+    )) return;
+
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.rpc("mark_visit_paid", {
+        p_visit_id: visitId
+      });
+      if (error) throw error;
+      if (data?.status !== "marked") {
+        const messages = {
+          not_found: "La visita ya no existe.",
+          property_archived: "El predio está archivado.",
+          visit_archived: "La visita está archivada.",
+          already_paid: "La visita ya figura abonada."
+        };
+        throw new Error(messages[data?.status] || "Supabase devolvió un resultado inesperado al marcar el pago.");
+      }
+      await loadData();
+      showNotice(`Se marcó como abonada la visita del predio ${visit.property_number}.`);
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function importPayments(event) {
@@ -1734,7 +1759,7 @@
     }
     if (!window.confirm(
       `Se revisarán ${rows.length} filas de pagos. ` +
-      "Se asignará la fecha del CSV a la visita activa más reciente de cada predio. " +
+      "Se asignará la fecha del CSV a la visita pendiente de pago más reciente de cada predio. " +
       "Las filas inválidas o que no se puedan aplicar se informarán sin cancelar las demás. ¿Continuar?"
     )) return;
 
@@ -1902,6 +1927,10 @@
     byId("payments-list").addEventListener("click", (event) => {
       const button = event.target.closest('button[data-action="correct-payment"]');
       if (button) correctPayment(button.dataset.id);
+    });
+    byId("pending-payments-list").addEventListener("click", (event) => {
+      const button = event.target.closest('button[data-action="mark-payment"]');
+      if (button) markVisitPaid(button.dataset.id);
     });
     byId("export-filtered").addEventListener("click", () => exportCsv(filteredVisits(), "filtrados"));
     byId("export-all").addEventListener("click", exportAllActiveVisits);

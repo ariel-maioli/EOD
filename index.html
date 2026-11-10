@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.5">
+  <link rel="stylesheet" href="styles.css?v=20261110.6">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.5" defer></script>
+  <script src="app.js?v=20261110.6" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -284,7 +284,7 @@
             <h2>Pagos</h2>
             <span class="info-tooltip" tabindex="0" aria-label="Información sobre pagos" aria-describedby="payments-info">
               <span aria-hidden="true">i</span>
-              <span id="payments-info" class="info-tooltip-text" role="tooltip">Consultá visitas abonadas y pendientes. Las pendientes son la visita activa más reciente de cada predio.</span>
+              <span id="payments-info" class="info-tooltip-text" role="tooltip">Consultá visitas abonadas y pendientes. Se muestra cada visita activa sin pagar, incluso si hay varias del mismo predio.</span>
             </span>
           </div>
           <form id="payments-form" class="stack payments-form" hidden>
@@ -294,7 +294,7 @@
           </form>
           <div id="payments-import-section" class="payments-import" hidden>
             <h3>Importar pagos desde CSV</h3>
-            <p class="muted">El archivo debe tener exactamente las columnas <strong>Predio</strong> y <strong>Fecha</strong>, con fecha DD/MM/AAAA. Se asigna esa fecha a la visita activa más reciente de cada predio; si hay filas inválidas o repetidas, se informan y se continúa con las demás. Máximo 2.000 filas y 5 MB.</p>
+            <p class="muted">El archivo debe tener exactamente las columnas <strong>Predio</strong> y <strong>Fecha</strong>, con fecha DD/MM/AAAA. Se asigna esa fecha a la visita pendiente de pago más reciente de cada predio; si hay filas inválidas o repetidas, se informan y se continúa con las demás. Máximo 2.000 filas y 5 MB.</p>
             <form id="payment-import-form" class="stack payments-form" hidden>
               <label class="field" for="payment-import-file">
                 <span>Archivo CSV de pagos</span>
