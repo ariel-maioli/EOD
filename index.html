@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.19">
+  <link rel="stylesheet" href="styles.css?v=20261110.20">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.19" defer></script>
+  <script src="app.js?v=20261110.20" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -251,7 +251,7 @@
             <label class="field" for="visit-import-file">
               <span>Archivo CSV</span>
               <input id="visit-import-file" type="file" accept=".csv,text/csv" required>
-              <small>Exportá el archivo desde Excel como CSV. Se aceptan separadores coma o punto y coma; máximo 2.000 filas y 5 MB. En las visitas importadas, Contacto y Notas que excedan su límite se truncan y se informan en el resumen.</small>
+              <small>Exportá el archivo desde Excel como CSV UTF-8 o CSV de Windows. Se aceptan separadores coma o punto y coma; máximo 2.000 filas y 5 MB. En las visitas importadas, Contacto y Notas que excedan su límite se truncan y se informan en el resumen.</small>
             </label>
             <div class="form-actions">
               <button class="button button-primary" type="submit">Revisar e importar visitas</button>
@@ -298,7 +298,7 @@
           </form>
           <div id="payments-import-section" class="payments-import" hidden>
             <h3>Importar pagos desde CSV</h3>
-            <p class="muted">El archivo debe tener exactamente las columnas <strong>Predio</strong> y <strong>Fecha</strong>, con fecha DD/MM/AAAA. Se asigna esa fecha a la visita pendiente de pago más reciente de cada predio; si hay filas inválidas o repetidas, se informan y se continúa con las demás. Máximo 2.000 filas y 5 MB.</p>
+            <p class="muted">El archivo debe tener exactamente las columnas <strong>Predio</strong> y <strong>Fecha</strong>, con fecha DD/MM/AAAA. Se aceptan archivos UTF-8 o CSV de Windows. Se asigna esa fecha a la visita pendiente de pago más reciente de cada predio; si hay filas inválidas o repetidas, se informan y se continúa con las demás. Máximo 2.000 filas y 5 MB.</p>
             <form id="payment-import-form" class="stack payments-form" hidden>
               <label class="field" for="payment-import-file">
                 <span>Archivo CSV de pagos</span>

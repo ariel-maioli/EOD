@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.19";
+  const APP_VERSION = "20261110.20";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -231,6 +231,15 @@
       }
     }
     return semicolons > commas ? ";" : ",";
+  }
+
+  async function readCsvFile(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      return new TextDecoder("windows-1252").decode(bytes);
+    }
   }
 
   function parseCsv(text, importType = "visits") {
@@ -1209,7 +1218,7 @@
 
     let rows;
     try {
-      rows = parseCsv(await file.text());
+      rows = parseCsv(await readCsvFile(file));
     } catch (error) {
       showNotice(error.message || "No se pudo leer el archivo CSV.", true);
       return;
@@ -1789,7 +1798,7 @@
 
     let rows;
     try {
-      rows = parseCsv(await file.text(), "payments");
+      rows = parseCsv(await readCsvFile(file), "payments");
     } catch (error) {
       showNotice(error.message || "No se pudo leer el archivo CSV de pagos.", true);
       return;
