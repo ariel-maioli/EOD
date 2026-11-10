@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.18";
+  const APP_VERSION = "20261110.19";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -756,6 +756,9 @@
       if (isTechnicianExperience()) {
         const phone = String(visit.cellphone).replace(/\D/g, "");
         const whatsappUrl = `https://wa.me/549${phone}`;
+        const editButton = !isTechnicianPreview() && visit.created_by === state.user?.id
+          ? `<button class="contact-action edit-action" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}" aria-label="Editar visita del predio ${escapeHtml(visit.property_number)}" title="Editar visita"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04a1 1 0 0 0 0-1.42l-2.5-2.5a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66Z"/></svg></button>`
+          : "";
         return `
           <article class="search-result-row">
             <strong>${escapeHtml(visit.property_number)}</strong>
@@ -769,6 +772,7 @@
               <button class="contact-action copy-action" type="button" data-action="copy-phone" data-phone="${escapeHtml(visit.cellphone)}" aria-label="Copiar celular ${escapeHtml(visit.cellphone)}" title="Copiar celular">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>
               </button>
+              ${editButton}
             </div>
           </article>`;
       }
