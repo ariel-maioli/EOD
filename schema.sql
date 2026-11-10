@@ -238,6 +238,8 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+    visit_assignee_id uuid;
 begin
     if auth.uid() is null then
         raise exception 'An authenticated user is required';
@@ -247,7 +249,15 @@ begin
         if tg_table_name = 'properties' and not public.is_admin() then
             raise exception 'Only an admin can add properties to the inventory';
         end if;
-        new.created_by := auth.uid();
+        if tg_table_name = 'visits' and public.is_admin() then
+            select assigned_to
+            into visit_assignee_id
+            from public.property_assignments
+            where id = new.assignment_id
+              and property_number = new.property_number
+              and closed_at is null;
+        end if;
+        new.created_by := coalesce(visit_assignee_id, auth.uid());
         new.created_at := now();
         new.updated_by := auth.uid();
         new.updated_at := now();
@@ -793,6 +803,280 @@ begin
 end;
 $$;
 
+create or replace function public.import_visits(
+    p_assigned_to uuid,
+    p_rows jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_row jsonb;
+    v_ordinality bigint;
+    v_row_number integer;
+    v_property_text text;
+    v_property_number integer;
+    v_visit_date date;
+    v_contact_name text;
+    v_cellphone text;
+    v_notes text;
+    v_assignment_id uuid;
+    v_profile_role text;
+    v_seen_properties text[] := array[]::text[];
+    v_imported jsonb := '[]'::jsonb;
+    v_invalid jsonb := '[]'::jsonb;
+    v_duplicate_in_file jsonb := '[]'::jsonb;
+    v_duplicate_visit jsonb := '[]'::jsonb;
+    v_not_found jsonb := '[]'::jsonb;
+    v_archived jsonb := '[]'::jsonb;
+    v_not_assigned jsonb := '[]'::jsonb;
+    v_future jsonb := '[]'::jsonb;
+    v_truncated jsonb := '[]'::jsonb;
+    v_errors jsonb := '[]'::jsonb;
+    v_property_archived_at timestamptz;
+    v_contact_truncated boolean;
+    v_notes_truncated boolean;
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can import visits';
+    end if;
+    if not public.application_access_allowed() then
+        raise exception 'The application is in maintenance mode';
+    end if;
+    if p_rows is null or jsonb_typeof(p_rows) <> 'array' then
+        raise exception 'The import rows must be a JSON array';
+    end if;
+    if jsonb_array_length(p_rows) > 2000 then
+        raise exception 'Import at most 2000 visits at a time';
+    end if;
+
+    select role into v_profile_role
+    from public.profiles
+    where id = p_assigned_to;
+    if not found or v_profile_role <> 'technician' then
+        raise exception 'The selected technician does not exist';
+    end if;
+
+    for v_row, v_ordinality in
+        select item.value, item.ordinality
+        from jsonb_array_elements(p_rows) with ordinality as item(value, ordinality)
+    loop
+        begin
+            v_row_number := coalesce((v_row ->> 'row_number')::integer, v_ordinality::integer + 1);
+        exception when others then
+            v_row_number := v_ordinality::integer + 1;
+        end;
+
+        if coalesce(v_row ->> 'parse_error', '') <> '' then
+            v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', coalesce(v_row ->> 'property_number', ''),
+                'reason', v_row ->> 'parse_error'
+            ));
+            continue;
+        end if;
+
+        v_property_text := btrim(coalesce(v_row ->> 'property_number', ''));
+
+        if v_property_text !~ '^[1-9][0-9]{5}$' then
+            v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_text,
+                'reason', 'El predio debe tener 6 dígitos y no comenzar con 0.'
+            ));
+            continue;
+        end if;
+        v_property_number := v_property_text::integer;
+
+        v_contact_name := btrim(coalesce(v_row ->> 'contact_name', ''));
+        v_cellphone := btrim(coalesce(v_row ->> 'cellphone', ''));
+        v_notes := nullif(btrim(coalesce(v_row ->> 'notes', '')), '');
+
+        v_contact_truncated := length(v_contact_name) > 50;
+        v_notes_truncated := length(coalesce(v_notes, '')) > 250;
+        if v_contact_truncated then
+            v_contact_name := left(v_contact_name, 50);
+        end if;
+        if v_notes_truncated then
+            v_notes := left(v_notes, 250);
+        end if;
+
+        if length(v_contact_name) not between 1 and 50
+           or v_cellphone !~ '^[1-9][0-9]{9}$' then
+            v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'Revisá contacto (1 a 50 caracteres) y celular (10 dígitos).'
+            ));
+            continue;
+        end if;
+
+        begin
+            if coalesce(v_row ->> 'visit_date', '') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+                raise exception using errcode = '22007';
+            end if;
+            v_visit_date := (v_row ->> 'visit_date')::date;
+        exception
+            when others then
+                v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', 'La fecha no es válida.'
+                ));
+                continue;
+        end;
+
+        if v_visit_date > (now() at time zone 'America/Argentina/Buenos_Aires')::date then
+            v_future := v_future || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'La fecha de visita no puede ser futura.'
+            ));
+            continue;
+        end if;
+
+        if v_property_number::text = any(v_seen_properties) then
+            v_duplicate_in_file := v_duplicate_in_file || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El archivo solo puede incluir una fila válida por predio.'
+            ));
+            continue;
+        end if;
+        v_seen_properties := array_append(v_seen_properties, v_property_number::text);
+
+        select archived_at
+        into v_property_archived_at
+        from public.properties
+        where property_number = v_property_number
+        for update;
+        if not found then
+            v_not_found := v_not_found || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El predio no existe en el inventario.'
+            ));
+            continue;
+        end if;
+        if v_property_archived_at is not null then
+            v_archived := v_archived || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El predio está archivado.'
+            ));
+            continue;
+        end if;
+
+        if exists (
+            select 1
+            from public.visits
+            where property_number = v_property_number
+              and visit_date = v_visit_date
+        ) then
+            v_duplicate_visit := v_duplicate_visit || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'Ya existe una visita para ese predio en esa fecha.'
+            ));
+            continue;
+        end if;
+
+        select id
+        into v_assignment_id
+        from public.property_assignments
+        where property_number = v_property_number
+          and assigned_to = p_assigned_to
+          and closed_at is null
+        for update;
+        if not found then
+            v_not_assigned := v_not_assigned || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El predio no tiene una asignación activa para el técnico seleccionado.'
+            ));
+            continue;
+        end if;
+
+        begin
+            insert into public.visits (
+                property_number,
+                assignment_id,
+                visit_date,
+                contact_name,
+                cellphone,
+                notes,
+                created_by,
+                updated_by
+            )
+            values (
+                v_property_number,
+                v_assignment_id,
+                v_visit_date,
+                v_contact_name,
+                v_cellphone,
+                v_notes,
+                p_assigned_to,
+                auth.uid()
+            );
+
+            update public.property_assignments
+            set completed_at = now(),
+                completed_by = p_assigned_to,
+                closed_at = now(),
+                closed_by = auth.uid(),
+                close_reason = 'visited'
+            where id = v_assignment_id;
+
+            v_imported := v_imported || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number
+            ));
+            if v_contact_truncated or v_notes_truncated then
+                v_truncated := v_truncated || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', concat_ws(
+                        ' ',
+                        case when v_contact_truncated
+                            then 'El contacto excedía 50 caracteres y se guardaron los primeros 50.' end,
+                        case when v_notes_truncated
+                            then 'Las notas excedían 250 caracteres y se guardaron los primeros 250.' end
+                    )
+                ));
+            end if;
+        exception
+            when unique_violation then
+                v_duplicate_visit := v_duplicate_visit || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', 'Ya existe una visita para ese predio en esa fecha.'
+                ));
+            when others then
+                v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', sqlerrm
+                ));
+        end;
+    end loop;
+
+    return jsonb_build_object(
+        'imported', v_imported,
+        'invalid', v_invalid,
+        'duplicate_in_file', v_duplicate_in_file,
+        'duplicate_visit', v_duplicate_visit,
+        'not_found', v_not_found,
+        'archived', v_archived,
+        'not_assigned', v_not_assigned,
+        'future', v_future,
+        'truncated', v_truncated,
+        'errors', v_errors
+    );
+end;
+$$;
+
 create or replace function public.mark_latest_visit_paid(p_property_number integer)
 returns jsonb
 language plpgsql
@@ -1016,6 +1300,9 @@ revoke all on function public.create_visit(integer, date, text, text, text)
     from public, anon;
 grant execute on function public.create_visit(integer, date, text, text, text)
     to authenticated;
+
+revoke all on function public.import_visits(uuid, jsonb) from public, anon;
+grant execute on function public.import_visits(uuid, jsonb) to authenticated;
 
 revoke all on function public.has_active_property_assignment(integer, uuid)
     from public, anon;

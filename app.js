@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261109.1";
+  const APP_VERSION = "20261109.3";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -215,6 +215,121 @@
 
   function parsePropertyList(value) {
     return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+  }
+
+  function csvDelimiter(text) {
+    let commas = 0;
+    let semicolons = 0;
+    let quoted = false;
+    for (let index = 0; index < text.length; index += 1) {
+      const character = text[index];
+      if (character === '"') {
+        if (quoted && text[index + 1] === '"') index += 1;
+        else quoted = !quoted;
+      } else if (!quoted && (character === "\n" || character === "\r")) {
+        break;
+      } else if (!quoted && character === ",") {
+        commas += 1;
+      } else if (!quoted && character === ";") {
+        semicolons += 1;
+      }
+    }
+    return semicolons > commas ? ";" : ",";
+  }
+
+  function parseCsv(text) {
+    const source = text.replace(/^\uFEFF/, "");
+    const delimiter = csvDelimiter(source);
+    const records = [];
+    let record = [];
+    let field = "";
+    let quoted = false;
+
+    for (let index = 0; index < source.length; index += 1) {
+      const character = source[index];
+      if (character === '"') {
+        if (quoted && source[index + 1] === '"') {
+          field += '"';
+          index += 1;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (!quoted && character === delimiter) {
+        record.push(field);
+        field = "";
+      } else if (!quoted && (character === "\n" || character === "\r")) {
+        if (character === "\r" && source[index + 1] === "\n") index += 1;
+        record.push(field);
+        if (record.some((value) => value.trim())) records.push(record);
+        record = [];
+        field = "";
+      } else {
+        field += character;
+      }
+    }
+
+    if (quoted) throw new Error("El CSV tiene comillas sin cerrar.");
+    if (field.length || record.length) {
+      record.push(field);
+      if (record.some((value) => value.trim())) records.push(record);
+    }
+    if (!records.length) throw new Error("El archivo CSV está vacío.");
+
+    const normalizeHeader = (value) => normalize(value).trim().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const headerAliases = {
+      property_number: ["predio", "numero_predio", "nro_predio"],
+      notes: ["notas"],
+      visit_date: ["fecha"],
+      contact_name: ["contacto", "nombre", "nombre_contacto"],
+      cellphone: ["celular", "telefono", "teléfono"]
+    };
+    const header = records[0].map(normalizeHeader);
+    const indexes = {};
+    for (const [fieldName, aliases] of Object.entries(headerAliases)) {
+      indexes[fieldName] = header.findIndex((value) => aliases.includes(value));
+    }
+    const missing = Object.entries(indexes).filter(([, index]) => index === -1).map(([fieldName]) => ({
+      property_number: "Predio",
+      notes: "Notas",
+      visit_date: "Fecha",
+      contact_name: "Contacto",
+      cellphone: "Celular"
+    })[fieldName]);
+    if (missing.length) {
+      throw new Error(`Faltan columnas requeridas: ${missing.join(", ")}.`);
+    }
+    if (new Set(Object.values(indexes)).size !== Object.values(indexes).length) {
+      throw new Error("El encabezado contiene columnas repetidas.");
+    }
+    if (records.length - 1 > 2000) throw new Error("El archivo supera el límite de 2.000 filas.");
+
+    const parseDate = (value) => {
+      const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!match) return "";
+      const [, dayText, monthText, yearText] = match;
+      const day = Number(dayText);
+      const month = Number(monthText);
+      const year = Number(yearText);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1
+          || date.getUTCDate() !== day) return "";
+      return `${yearText}-${monthText}-${dayText}`;
+    };
+
+    return records.slice(1).map((cells, index) => {
+      const item = (name) => cells[indexes[name]]?.trim() || "";
+      return {
+        row_number: index + 2,
+        property_number: item("property_number"),
+        notes: item("notes"),
+        visit_date: parseDate(item("visit_date")),
+        contact_name: item("contact_name"),
+        cellphone: item("cellphone"),
+        ...(cells.length !== header.length
+          ? { parse_error: "La fila no tiene la misma cantidad de columnas que el encabezado." }
+          : {})
+      };
+    });
   }
 
   async function fetchAllRows(table, orderColumn) {
@@ -875,6 +990,39 @@
       : "";
   }
 
+  function renderVisitImportResult(result) {
+    const groups = [
+      ["imported", "Importadas"],
+      ["truncated", "Importadas con datos truncados"],
+      ["invalid", "Datos inválidos"],
+      ["duplicate_in_file", "Predio repetido en el archivo"],
+      ["duplicate_visit", "Visita existente"],
+      ["not_found", "Predio inexistente"],
+      ["archived", "Predio archivado"],
+      ["not_assigned", "Sin asignación activa al técnico"],
+      ["future", "Fecha futura"],
+      ["errors", "Errores"]
+    ];
+    const summaries = groups.flatMap(([key, label]) => {
+      const entries = result[key] || [];
+      if (!entries.length) return [];
+      const lines = entries.map((entry) => {
+        const property = entry.property ? ` · Predio ${entry.property}` : "";
+        const reason = entry.reason ? `: ${entry.reason}` : "";
+        return `<li>Fila ${escapeHtml(entry.row)}${escapeHtml(property)}${escapeHtml(reason)}</li>`;
+      }).join("");
+      return [`
+        <section class="import-result-group">
+          <h3>${escapeHtml(label)} (${entries.length})</h3>
+          <ul>${lines}</ul>
+        </section>
+      `];
+    });
+    byId("visit-import-result").innerHTML = summaries.length
+      ? `<div class="import-result-summary">${summaries.join("")}</div>`
+      : '<div class="empty-state">No se recibieron resultados de la importación.</div>';
+  }
+
   function renderPropertiesPanel() {
     if (!canUseAdminFeatures()) return;
 
@@ -886,6 +1034,16 @@
       .join("");
     if (state.profiles.some((profile) => profile.id === selectedAssignee)) {
       assignee.value = selectedAssignee;
+    }
+
+    const importTechnician = byId("visit-import-technician");
+    const selectedImportTechnician = importTechnician.value || state.profile?.id || "";
+    importTechnician.innerHTML = state.profiles
+      .filter((profile) => profile.role === "technician")
+      .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}</option>`)
+      .join("");
+    if (state.profiles.some((profile) => profile.id === selectedImportTechnician && profile.role === "technician")) {
+      importTechnician.value = selectedImportTechnician;
     }
 
     const rate = Number(state.trackingSettings.visits_per_workday) || 2;
@@ -977,6 +1135,80 @@
         `;
       }).join("")
       : '<div class="empty-state">No hay predios para este filtro.</div>';
+  }
+
+  async function importVisits(event) {
+    event.preventDefault();
+    if (!canUseAdminFeatures() || state.busy) return;
+
+    const file = byId("visit-import-file").files[0];
+    const technicianId = byId("visit-import-technician").value;
+    if (!file) {
+      showNotice("Seleccioná un archivo CSV.", true);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showNotice("El archivo supera el límite de 5 MB.", true);
+      return;
+    }
+
+    let rows;
+    try {
+      rows = parseCsv(await file.text());
+    } catch (error) {
+      showNotice(error.message || "No se pudo leer el archivo CSV.", true);
+      return;
+    }
+    if (!rows.length) {
+      showNotice("El archivo no contiene filas de visitas.", true);
+      return;
+    }
+    if (!window.confirm(
+      `Se revisarán ${rows.length} filas para ${profileName(technicianId)}. ` +
+      "Las visitas importadas completarán la asignación activa de cada predio. " +
+      "Las filas inválidas o no asignadas se informarán sin cancelar las demás. ¿Continuar?"
+    )) return;
+
+    byId("visit-import-result").innerHTML = "";
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.rpc("import_visits", {
+        p_assigned_to: technicianId,
+        p_rows: rows
+      });
+      if (error) throw error;
+      renderVisitImportResult(data);
+      byId("visit-import-file").value = "";
+      const importedCount = data?.imported?.length || 0;
+      const rejectedCount = rows.length - importedCount;
+      const completionMessage =
+        `Importación finalizada: ${importedCount} ${importedCount === 1 ? "visita importada" : "visitas importadas"}` +
+        `${rejectedCount ? ` y ${rejectedCount} ${rejectedCount === 1 ? "fila rechazada" : "filas rechazadas"}` : ""}.`;
+      try {
+        await loadData();
+        showNotice(completionMessage);
+      } catch (error) {
+        showNotice(`${completionMessage} No se pudo actualizar el panel: ${humanError(error)}`, true);
+      }
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadVisitImportTemplate() {
+    const content = "\uFEFFPredio,Notas,Fecha,Contacto,Celular\r\n";
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "plantilla-importacion-visitas.csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function addProperties(event) {
@@ -1501,6 +1733,8 @@
     byId("property-add-form").addEventListener("submit", addProperties);
     byId("property-assign-form").addEventListener("submit", assignProperties);
     byId("property-settings-form").addEventListener("submit", savePropertyTrackingSettings);
+    byId("visit-import-form").addEventListener("submit", importVisits);
+    byId("visit-import-template").addEventListener("click", downloadVisitImportTemplate);
     byId("property-status-filter").addEventListener("change", renderPropertiesPanel);
     byId("sign-out").addEventListener("click", async () => {
       setBusy(true);

@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261109.1">
+  <link rel="stylesheet" href="styles.css?v=20261109.3">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261109.1" defer></script>
+  <script src="app.js?v=20261109.3" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -215,6 +215,28 @@
             <button class="button button-primary" type="submit">Asignar predios</button>
           </form>
           <div id="property-assign-result" class="property-operation-result" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Carga por lote</div>
+          <h2>Importar visitas desde CSV</h2>
+          <p class="muted">El archivo debe tener una fila por predio y las columnas <strong>Predio, Notas, Fecha, Contacto, Celular</strong>. Usá fecha DD/MM/AAAA. Solo se importan predios existentes, no archivados y con una asignación activa al técnico seleccionado. Cada visita importada completa esa asignación.</p>
+          <form id="visit-import-form" class="stack property-form">
+            <label class="field" for="visit-import-technician">
+              <span>Técnico responsable</span>
+              <select id="visit-import-technician" required></select>
+            </label>
+            <label class="field" for="visit-import-file">
+              <span>Archivo CSV</span>
+              <input id="visit-import-file" type="file" accept=".csv,text/csv" required>
+              <small>Exportá el archivo desde Excel como CSV. Se aceptan separadores coma o punto y coma; máximo 2.000 filas y 5 MB. En las visitas importadas, Contacto y Notas que excedan su límite se truncan y se informan en el resumen.</small>
+            </label>
+            <div class="form-actions">
+              <button class="button button-primary" type="submit">Revisar e importar visitas</button>
+              <button id="visit-import-template" class="button button-secondary" type="button">Descargar plantilla CSV</button>
+            </div>
+          </form>
+          <div id="visit-import-result" class="property-operation-result" aria-live="polite"></div>
         </div>
 
         <div class="card">

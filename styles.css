@@ -163,6 +163,10 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .property-form { max-width: 650px; margin-top: 18px; }
 .property-operation-result { margin-top: 14px; }
 .operation-summary { display: grid; gap: 5px; margin: 0; padding: 13px 16px 13px 34px; border-radius: 9px; background: #f5f8f9; color: var(--muted); font-size: .88rem; }
+.import-result-summary { display: grid; gap: 12px; }
+.import-result-group { padding: 12px 15px; border: 1px solid var(--line); border-radius: 10px; background: #f8fbfc; }
+.import-result-group h3 { margin: 0 0 7px; font-size: .95rem; }
+.import-result-group ul { display: grid; gap: 4px; max-height: 220px; overflow: auto; margin: 0; padding-left: 22px; color: var(--muted); font-size: .86rem; }
 .property-status-filter { width: min(220px, 100%); }
 .property-inventory { display: grid; margin-top: 16px; }
 .property-inventory-row { display: grid; grid-template-columns: minmax(70px, .7fr) minmax(110px, .9fr) minmax(130px, 1.4fr) minmax(90px, .8fr); align-items: center; gap: 10px; padding: 11px 8px; border-bottom: 1px solid var(--line); }
