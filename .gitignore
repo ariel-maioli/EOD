@@ -1,3 +1,6 @@
 # Local-only settings, if a private override is added later.
 config.local.js
 config.dev.js
+
+# Local data files
+data/
