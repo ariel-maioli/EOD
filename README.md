@@ -65,6 +65,7 @@ No necesitás ejecutar scripts de migración separados: `schema.sql` es la fuent
 - **Cobertura:** el panel muestra el inventario por estado y permite filtrarlo por técnico o administrador asignado. Estima los días hábiles de cobertura por responsable. Los valores iniciales son 2 predios por día hábil y alerta a 15 días; el admin puede modificarlos. El cálculo usa lunes a viernes.
 - El administrador puede elegir un técnico en **Ver como** para revisar sus datos y la interfaz de técnico. Es una vista de solo lectura: no cambia la sesión ni los permisos reales del administrador.
 - La vista previa sirve para comprobar la presentación y los datos filtrados, no para verificar permisos reales de un técnico.
+- El botón **Ayuda**, disponible antes y después de ingresar, abre una guía para técnicos con pasos para entrar, cargar, buscar y corregir visitas, consultar pagos y cerrar sesión. Los temas se pueden desplegar por separado y la guía se adapta a celulares y computadoras.
 - Los datos se vuelven a cargar al entrar en cada sección. Al actualizar la página, la sesión existente se restaura y se vuelven a cargar los datos.
 - El saludo cambia según la hora de Argentina: «Buenos días» (05:00–11:59), «Buenas tardes» (12:00–19:59) y «Buenas noches» (20:00–04:59).
 

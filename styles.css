@@ -50,6 +50,7 @@ body {
 }
 
 .session-area { display: flex; align-items: center; gap: 14px; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .session-email { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
 .view-as-control { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: .82rem; }
 .view-as-control select { min-height: 38px; max-width: 190px; padding: 6px 9px; border: 1px solid #c8d5db; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
@@ -192,17 +193,28 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .activity-top { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 6px; }
 .activity-entry p { margin: 5px 0; line-height: 1.5; overflow-wrap: anywhere; }
 .activity-change { color: var(--muted); font-size: .88rem; }
+.help-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 26px rgb(23 43 58 / 18%); }
+.help-dialog::backdrop { background: rgb(23 43 58 / 55%); }
+.help-dialog .section-heading h2 { margin: 0; }
+.help-dialog > p { margin: 10px 0 16px; }
+.help-topics details { border-top: 1px solid var(--line); line-height: 1.5; }
+.help-topics summary { padding: 14px 0; color: var(--primary-dark); font-weight: 700; cursor: pointer; }
+.help-topics summary:focus-visible { outline: 3px solid rgb(14 100 117 / 20%); outline-offset: 2px; }
+.help-topics ol { padding-left: 24px; }
+.help-topics li { margin-bottom: 8px; }
 .footer { padding: 20px; text-align: center; color: var(--muted); font-size: .82rem; }
 
 @media (max-width: 680px) {
   .topbar { min-height: 60px; padding: 10px 16px; }
   .brand span { display: block; font-size: .75rem; }
-  .session-area { gap: 6px; flex-direction: column; align-items: flex-end; }
+  .topbar-actions { gap: 6px; }
+  .session-area { min-width: 0; gap: 6px; flex-direction: column; align-items: flex-end; }
   .session-email { max-width: 52vw; font-size: .75rem; }
-  .view-as-control { flex-direction: column; align-items: flex-end; gap: 3px; }
-  .view-as-control select { max-width: 52vw; }
+  .view-as-control { max-width: 100%; flex-direction: column; align-items: flex-end; gap: 3px; }
+  .view-as-control select { max-width: min(52vw, 100%); }
   .page { width: min(100% - 22px, 920px); margin: 22px auto 44px; }
   .card { padding: 19px; border-radius: 13px; }
+  .help-dialog { padding: 16px; }
   .form-grid, .filters { grid-template-columns: 1fr; gap: 14px; }
   .field-full { grid-column: auto; }
   .tabs { overflow-x: auto; }

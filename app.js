@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.23";
+  const APP_VERSION = "20261110.24";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -1916,6 +1916,15 @@
   }
 
   function bindEvents() {
+    byId("open-help").addEventListener("click", () => {
+      byId("help-dialog").showModal();
+    });
+    byId("help-dialog").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        byId("help-dialog").close();
+      }
+    });
     byId("forgot-password").addEventListener("click", () => {
       clearNotice();
       byId("recovery-email").value = byId("login-email").value.trim();

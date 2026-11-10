@@ -5,23 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.23">
+  <link rel="stylesheet" href="styles.css?v=20261110.24">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.23" defer></script>
+  <script src="app.js?v=20261110.24" defer></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="#" aria-label="EOD, inicio">EOD<span> · Fin de jornada</span></a>
-    <div id="session-area" class="session-area" hidden>
-      <span id="session-email" class="session-email"></span>
-      <label id="view-as-control" class="view-as-control" for="view-as-technician" hidden>
-        <span>Ver como</span>
-        <select id="view-as-technician">
-          <option value="">Administrador</option>
-        </select>
-      </label>
-      <button id="sign-out" class="button button-quiet" type="button">Cerrar sesión</button>
+    <div class="topbar-actions">
+      <button id="open-help" class="button button-secondary button-small" type="button" aria-haspopup="dialog" aria-controls="help-dialog">Ayuda</button>
+      <div id="session-area" class="session-area" hidden>
+        <span id="session-email" class="session-email"></span>
+        <label id="view-as-control" class="view-as-control" for="view-as-technician" hidden>
+          <span>Ver como</span>
+          <select id="view-as-technician">
+            <option value="">Administrador</option>
+          </select>
+        </label>
+        <button id="sign-out" class="button button-quiet" type="button">Cerrar sesión</button>
+      </div>
     </div>
   </header>
 
@@ -346,6 +349,67 @@
       </section>
     </section>
   </main>
+  <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
+    <div class="section-heading">
+      <h2 id="help-title">Ayuda para técnicos</h2>
+      <form method="dialog">
+        <button class="button button-quiet" type="submit" autofocus>Cerrar</button>
+      </form>
+    </div>
+    <p class="muted">Tocá un tema para ver los pasos. Podés consultar esta ayuda cuando la necesites.</p>
+    <div class="help-topics">
+      <details>
+        <summary>Ingresar o recuperar mi contraseña</summary>
+        <ol>
+          <li>Abrí EOD, escribí tu correo y contraseña y tocá <strong>Ingresar</strong>.</li>
+          <li>Si olvidaste la contraseña, tocá <strong>Olvidé mi contraseña</strong>, escribí tu correo y tocá <strong>Enviar enlace</strong>.</li>
+          <li>Revisá tu correo, también el no deseado, y seguí el enlace para crear una contraseña de al menos 8 caracteres.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Cargar una visita</summary>
+        <ol>
+          <li>Tocá <strong>Nueva visita</strong>.</li>
+          <li>Escribí el número de predio de 6 dígitos y verificá la fecha de visita.</li>
+          <li>Completá el nombre de contacto y el celular: 10 dígitos con código de área, sin 0 ni 15.</li>
+          <li>Si hace falta, agregá información útil en <strong>Notas</strong>.</li>
+          <li>Tocá <strong>Guardar visita</strong> y esperá el mensaje de confirmación.</li>
+        </ol>
+        <p>El predio debe estar asignado a vos. No se permiten fechas futuras ni dos visitas del mismo predio en la misma fecha. Si no podés cargar la visita, consultá al administrador.</p>
+      </details>
+      <details>
+        <summary>Buscar una visita</summary>
+        <ol>
+          <li>Tocá <strong>Buscar visitas</strong>.</li>
+          <li>Escribí el número de predio, el nombre de contacto o el celular. También podés elegir fechas.</li>
+          <li>En la fila, usá los botones para abrir WhatsApp o copiar el celular.</li>
+        </ol>
+        <p>Al entrar se muestran tus últimas 25 visitas. Tocá <strong>Limpiar filtros</strong> para ver todas las visitas disponibles.</p>
+        <p>Una fila marcada con <strong>⚠</strong> tiene un contacto o celular pendiente de completar. Si tenés los datos correctos y la visita es tuya, podés corregirlos.</p>
+      </details>
+      <details>
+        <summary>Corregir una visita</summary>
+        <ol>
+          <li>En <strong>Buscar visitas</strong>, buscá la visita que cargaste.</li>
+          <li>Tocá el ícono del <strong>lápiz</strong> junto al celular.</li>
+          <li>Corregí los datos, tocá <strong>Guardar cambios</strong> y esperá la confirmación.</li>
+        </ol>
+        <p>No se puede cambiar el número de predio al editar. Si necesitás corregirlo, consultá al administrador.</p>
+      </details>
+      <details>
+        <summary>Consultar pagos</summary>
+        <ol>
+          <li>Tocá <strong>Pagos</strong>.</li>
+          <li>En <strong>Predios abonados</strong> verás las visitas pagadas en la última fecha de pago visible. En <strong>Pendientes</strong> están las visitas que todavía no figuran como pagadas.</li>
+        </ol>
+        <p>Si encontrás una diferencia, consultá al administrador. Los pagos los registra el administrador.</p>
+      </details>
+      <details>
+        <summary>Cerrar sesión</summary>
+        <p>Cuando termines, tocá <strong>Cerrar sesión</strong> en la parte superior de la pantalla.</p>
+      </details>
+    </div>
+  </dialog>
   <footer class="footer">EOD · Registro interno de mantenimiento</footer>
 </body>
 </html>
