@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.20">
+  <link rel="stylesheet" href="styles.css?v=20261110.22">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.20" defer></script>
+  <script src="app.js?v=20261110.22" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -41,14 +41,29 @@
 
     <section id="login-panel" class="card auth-card" hidden>
       <div class="eyebrow">Mantenimiento de predios</div>
-      <h1>Ingresar a EOD</h1>
-      <p class="muted">Usá la cuenta que te asignó el administrador.</p>
+      <h1 id="auth-title">Ingresar a EOD</h1>
+      <p id="auth-hint" class="muted">Usá la cuenta que te asignó el administrador.</p>
       <form id="login-form" class="stack">
         <label for="login-email">Correo electrónico</label>
         <input id="login-email" name="email" type="email" autocomplete="username" required>
         <label for="login-password">Contraseña</label>
         <input id="login-password" name="password" type="password" autocomplete="current-password" required>
         <button class="button button-primary" type="submit">Ingresar</button>
+        <button id="forgot-password" class="button button-quiet" type="button">Olvidé mi contraseña</button>
+      </form>
+      <form id="recovery-request-form" class="stack" hidden>
+        <label for="recovery-email">Correo electrónico</label>
+        <input id="recovery-email" type="email" autocomplete="email" required>
+        <button class="button button-primary" type="submit">Enviar enlace</button>
+        <button id="recovery-back" class="button button-quiet" type="button">Volver a ingresar</button>
+      </form>
+      <form id="recovery-password-form" class="stack" hidden>
+        <label for="recovery-password">Contraseña nueva</label>
+        <input id="recovery-password" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="recovery-password-confirm">Confirmar contraseña nueva</label>
+        <input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="8" required>
+        <button class="button button-primary" type="submit">Guardar contraseña</button>
+        <button id="recovery-cancel" class="button button-quiet" type="button">Cancelar</button>
       </form>
     </section>
 

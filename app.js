@@ -1,7 +1,8 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.20";
+  const APP_VERSION = "20261110.22";
+  const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -26,6 +27,21 @@
     searchTimer: null,
     searchAllVisits: false
   };
+
+  function showAuthForm(form) {
+    const forms = ["login", "recovery-request", "recovery-password"];
+    forms.forEach((name) => {
+      byId(`${name}-form`).hidden = name !== form;
+    });
+    const labels = {
+      login: ["Ingresar a EOD", "Usá la cuenta que te asignó el administrador."],
+      "recovery-request": ["Restablecer contraseña", "Ingresá tu correo para recibir un enlace y crear una contraseña nueva."],
+      "recovery-password": ["Crear contraseña nueva", "Ingresá una contraseña de al menos 8 caracteres."]
+    };
+    byId("auth-title").textContent = labels[form][0];
+    byId("auth-hint").textContent = labels[form][1];
+    byId("login-panel").hidden = false;
+  }
 
   function showNotice(message, isError = false) {
     window.clearTimeout(state.noticeTimer);
@@ -87,6 +103,7 @@
 
   async function checkForAppUpdate() {
     if (byId("login-panel").hidden || document.visibilityState !== "visible") return;
+    if (byId("login-form").hidden) return;
     if (byId("login-password").value || byId("login-form").contains(document.activeElement)) return;
 
     try {
@@ -480,9 +497,10 @@
     window.clearTimeout(state.searchTimer);
     byId("application").hidden = true;
     byId("session-area").hidden = true;
-    byId("login-panel").hidden = false;
-    byId("login-form").hidden = false;
+    sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+    showAuthForm("login");
     byId("login-password").value = "";
+    byId("recovery-password-form").reset();
     state.user = null;
     state.profile = null;
     state.activeView = null;
@@ -1896,6 +1914,94 @@
   }
 
   function bindEvents() {
+    byId("forgot-password").addEventListener("click", () => {
+      clearNotice();
+      byId("recovery-email").value = byId("login-email").value.trim();
+      showAuthForm("recovery-request");
+      byId("recovery-email").focus();
+    });
+    byId("recovery-back").addEventListener("click", () => {
+      clearNotice();
+      byId("login-email").value = byId("recovery-email").value.trim();
+      showAuthForm("login");
+    });
+    byId("recovery-request-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (state.busy) return;
+      if (!["http:", "https:"].includes(window.location.protocol)) {
+        showNotice("Para recuperar la contraseña, abrí EOD desde su dirección web. El enlace no funciona desde un archivo local.", true);
+        return;
+      }
+      const redirectUrl = new URL(window.location.pathname, window.location.origin);
+      if (new URLSearchParams(window.location.search).get("env") === "dev") {
+        redirectUrl.searchParams.set("env", "dev");
+      }
+      setBusy(true);
+      clearNotice();
+      try {
+        const { error } = await state.client.auth.resetPasswordForEmail(
+          byId("recovery-email").value.trim(),
+          { redirectTo: redirectUrl.href }
+        );
+        if (error) throw error;
+        byId("auth-hint").textContent = "Si el correo corresponde a una cuenta, recibirás un enlace para crear una contraseña nueva. Revisá también el correo no deseado.";
+      } catch (error) {
+        showNotice(`No se pudo solicitar la recuperación. ${humanError(error)}`, true);
+      } finally {
+        setBusy(false);
+      }
+    });
+    byId("recovery-cancel").addEventListener("click", async () => {
+      if (state.busy) return;
+      setBusy(true);
+      clearNotice();
+      try {
+        const { error } = await state.client.auth.signOut({ scope: "local" });
+        if (error) throw error;
+        showLoggedOut();
+      } catch (error) {
+        showNotice(`No se pudo cerrar la sesión de recuperación. ${humanError(error)}`, true);
+      } finally {
+        setBusy(false);
+      }
+    });
+    byId("recovery-password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (state.busy) return;
+      const password = byId("recovery-password").value;
+      if (password.length < 8) {
+        showNotice("La contraseña debe tener al menos 8 caracteres.", true);
+        return;
+      }
+      if (password !== byId("recovery-password-confirm").value) {
+        showNotice("Las contraseñas no coinciden.", true);
+        return;
+      }
+      setBusy(true);
+      clearNotice();
+      let updated = false;
+      try {
+        const { data: userData, error: userError } = await state.client.auth.getUser();
+        if (userError) throw userError;
+        if (!userData.user || userData.user.id !== sessionStorage.getItem(RECOVERY_SESSION_KEY)) {
+          throw new Error("La sesión de recuperación ya no es válida. Solicitá un enlace nuevo.");
+        }
+        const { error } = await state.client.auth.updateUser({ password });
+        if (error) throw error;
+        updated = true;
+        const { error: signOutError } = await state.client.auth.signOut({ scope: "local" });
+        if (signOutError) throw signOutError;
+        showLoggedOut();
+        showNotice("Contraseña actualizada. Ya podés ingresar con tu contraseña nueva.");
+      } catch (error) {
+        showNotice(updated
+          ? `La contraseña se actualizó, pero no se pudo cerrar la sesión de recuperación. ${humanError(error)}`
+          : `No se pudo cambiar la contraseña. ${humanError(error)}`, true);
+      } finally {
+        byId("recovery-password-form").reset();
+        setBusy(false);
+      }
+    });
     byId("login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (state.busy) return;
@@ -2042,26 +2148,72 @@
       return;
     }
 
-    const recoveryLink = new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery";
-    if (recoveryLink) {
-      history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
-    }
-    state.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-    byId("login-panel").hidden = false;
-    if (recoveryLink) {
-      showNotice("La recuperación de contraseña no está disponible en EOD. Contactá al administrador.");
-    }
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const recoveryLink = hashParams.get("type") === "recovery";
+    const recoveryError = hashParams.get("error");
+    if (recoveryLink || recoveryError) sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+    state.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: { flowType: "implicit" }
+    });
+    showAuthForm("login");
+
+    let receivedRecovery = false;
+    let acceptRecovery = true;
+    let resolveRecovery;
+    const recoveryEvent = new Promise((resolve) => { resolveRecovery = resolve; });
+    state.client.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session?.user && acceptRecovery) {
+        receivedRecovery = true;
+        sessionStorage.setItem(RECOVERY_SESSION_KEY, session.user.id);
+        byId("application").hidden = true;
+        byId("session-area").hidden = true;
+        showAuthForm("recovery-password");
+        resolveRecovery();
+      }
+      if (event === "SIGNED_OUT") showLoggedOut();
+    });
 
     startMaintenanceChecks();
     await refreshMaintenanceStatus();
 
-    state.client.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") showLoggedOut();
-    });
-
     const { data, error } = await state.client.auth.getSession();
+    if (recoveryError) {
+      history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
+      sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+      showNotice("El enlace de recuperación es inválido o venció. Solicitá uno nuevo.", true);
+      return;
+    }
     if (error) {
-      showNotice(humanError(error), true);
+      sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+      showNotice(recoveryLink
+        ? "El enlace de recuperación es inválido o venció. Solicitá uno nuevo."
+        : humanError(error), true);
+      return;
+    }
+    if (recoveryLink && !receivedRecovery && data.session?.user) {
+      await new Promise((resolve) => {
+        const timer = window.setTimeout(resolve, 5000);
+        recoveryEvent.then(() => {
+          window.clearTimeout(timer);
+          resolve();
+        });
+      });
+    }
+    if (recoveryLink && !receivedRecovery) {
+      acceptRecovery = false;
+      history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
+      sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+      showNotice("No se pudo validar el enlace de recuperación. Solicitá uno nuevo.", true);
+      return;
+    }
+    const recoveryUserId = sessionStorage.getItem(RECOVERY_SESSION_KEY);
+    if (recoveryUserId) {
+      if (data.session?.user?.id === recoveryUserId) {
+        showAuthForm("recovery-password");
+      } else {
+        sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+        showNotice("La sesión de recuperación venció. Solicitá un enlace nuevo.", true);
+      }
       return;
     }
     if (data.session?.user) {

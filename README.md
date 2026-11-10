@@ -26,7 +26,7 @@ Aplicación web para registrar y consultar visitas de mantenimiento a predios. L
 
    Pegá la URL completa de **Project URL** en `supabaseUrl` y la clave pública en `supabaseAnonKey`. La clave pública se utiliza desde el navegador y no reemplaza las políticas de acceso. **Nunca uses ni publiques la clave `service_role` o una clave secreta.**
 
-6. En **Authentication → URL Configuration**, configurá **Site URL** con la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`. EOD no ofrece recuperación ni cambio de contraseña desde la interfaz; quitar esa opción no impide que Supabase Auth permita cambiarla por otros medios.
+6. En **Authentication → URL Configuration**, configurá **Site URL** con la URL publicada, por ejemplo `https://ariel-maioli.github.io/EOD/`, y agregá esa URL exacta (o la URL de `index.html` si así se abre EOD) a **Redirect URLs**. Para recuperación por correo, configurá también el envío de correos de Supabase y verificá la plantilla **Reset Password**. El servicio SMTP predeterminado tiene restricciones y no sirve para enviar a destinatarios arbitrarios: para técnicos externos configurá un proveedor SMTP propio. Consultá [SMTP de Supabase](https://supabase.com/docs/guides/auth/auth-smtp).
 
 ## Desarrollo local con un proyecto Supabase separado
 
@@ -42,6 +42,12 @@ window.EOD_CONFIG = Object.freeze({
 El archivo `config.dev.js` está excluido de Git. Abrí `index.html?env=dev` en el navegador; por ejemplo, `file:///C:/ThNet/EOD/index.html?env=dev`. Ese modo carga únicamente `config.dev.js` y no usa la configuración de producción si el archivo falta o no carga. Para la aplicación publicada, seguí usando `index.html` sin `?env=dev`; esta usa `config.js` y producción.
 
 Usá la clave pública de Supabase, nunca la clave `service_role` ni una clave secreta. La clave pública no concede permisos por sí sola; el acceso a los datos depende de las políticas RLS.
+
+Para probar la recuperación por correo en EOD-dev, serví la carpeta mediante HTTP en localhost y abrí, por ejemplo, `http://localhost:8000/index.html?env=dev`. Agregá esa URL exacta a **Authentication → URL Configuration → Redirect URLs** del proyecto EOD-dev y configurá su correo por separado. Los enlaces de Supabase no pueden volver a `file://`; la aplicación informa esta limitación al solicitar la recuperación desde un archivo local. No uses la configuración ni el proyecto de producción para estas pruebas.
+
+## Restablecer contraseña
+
+En la pantalla de ingreso, elegí **Olvidé mi contraseña**, ingresá el correo de tu cuenta y solicitá el enlace. Abrí el correo en el mismo dispositivo o en otro, seguí el enlace y elegí una contraseña nueva de al menos 8 caracteres. Después ingresá con la contraseña nueva. Si el enlace venció o ya se usó, solicitá otro. El mensaje de solicitud no confirma si una cuenta existe. Si no llega el correo, revisá correo no deseado y consultá al administrador para verificar la configuración de envío y la URL de retorno.
 
 ## Actualizar un proyecto Supabase existente
 
