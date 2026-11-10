@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261109.3";
+  const APP_VERSION = "20261110.2";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -601,11 +601,11 @@
     const selected = select.value;
     const options = ['<option value="">Todos</option>'];
     state.profiles
-      .filter((profile) => profile.role === "technician")
+      .filter((profile) => profile.role === "technician" || profile.role === "admin")
       .slice()
       .sort((a, b) => profileName(a.id).localeCompare(profileName(b.id), "es"))
       .forEach((profile) => {
-        options.push(`<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}</option>`);
+        options.push(`<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}${profile.role === "admin" ? " · Admin" : ""}</option>`);
       });
     select.innerHTML = options.join("");
     if (state.profiles.some((profile) => profile.id === selected)) select.value = selected;
@@ -704,19 +704,13 @@
       const property = propertyFor(visit.property_number);
       const parentArchived = Boolean(property?.archived_at);
       const isArchived = Boolean(visit.archived_at || parentArchived);
-      if (isTechnicianExperience() && (!property || isArchived)) return false;
+      if (isTechnicianExperience() && isArchived) return false;
       if (status === "active" && isArchived) return false;
       if (status === "archived" && !isArchived) return false;
       if (status === "all" && isTechnicianExperience() && isArchived) return false;
       if (from && visit.visit_date < from) return false;
       if (to && visit.visit_date > to) return false;
       if (userId && visit.created_by !== userId) return false;
-      if (canUseAdminFeatures() && !userId
-          && !state.profiles.some((profile) =>
-            profile.id === visit.created_by && profile.role === "technician")) {
-        return false;
-      }
-
       if (query) {
         const searchableText = normalize([
           visit.property_number,
@@ -999,7 +993,7 @@
       ["duplicate_visit", "Visita existente"],
       ["not_found", "Predio inexistente"],
       ["archived", "Predio archivado"],
-      ["not_assigned", "Sin asignación activa al técnico"],
+      ["not_assigned", "Sin asignación activa al responsable"],
       ["future", "Fecha futura"],
       ["errors", "Errores"]
     ];
@@ -1036,14 +1030,15 @@
       assignee.value = selectedAssignee;
     }
 
-    const importTechnician = byId("visit-import-technician");
-    const selectedImportTechnician = importTechnician.value || state.profile?.id || "";
-    importTechnician.innerHTML = state.profiles
-      .filter((profile) => profile.role === "technician")
-      .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}</option>`)
+    const importAssignee = byId("visit-import-assignee");
+    const selectedImportAssignee = importAssignee.value || state.profile?.id || "";
+    importAssignee.innerHTML = state.profiles
+      .filter((profile) => profile.role === "technician" || profile.role === "admin")
+      .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}${profile.role === "admin" ? " · Admin" : ""}</option>`)
       .join("");
-    if (state.profiles.some((profile) => profile.id === selectedImportTechnician && profile.role === "technician")) {
-      importTechnician.value = selectedImportTechnician;
+    if (state.profiles.some((profile) => profile.id === selectedImportAssignee
+        && (profile.role === "technician" || profile.role === "admin"))) {
+      importAssignee.value = selectedImportAssignee;
     }
 
     const rate = Number(state.trackingSettings.visits_per_workday) || 2;
@@ -1142,7 +1137,7 @@
     if (!canUseAdminFeatures() || state.busy) return;
 
     const file = byId("visit-import-file").files[0];
-    const technicianId = byId("visit-import-technician").value;
+    const assigneeId = byId("visit-import-assignee").value;
     if (!file) {
       showNotice("Seleccioná un archivo CSV.", true);
       return;
@@ -1164,7 +1159,7 @@
       return;
     }
     if (!window.confirm(
-      `Se revisarán ${rows.length} filas para ${profileName(technicianId)}. ` +
+      `Se revisarán ${rows.length} filas para ${profileName(assigneeId)}. ` +
       "Las visitas importadas completarán la asignación activa de cada predio. " +
       "Las filas inválidas o no asignadas se informarán sin cancelar las demás. ¿Continuar?"
     )) return;
@@ -1174,7 +1169,7 @@
     clearNotice();
     try {
       const { data, error } = await state.client.rpc("import_visits", {
-        p_assigned_to: technicianId,
+        p_assigned_to: assigneeId,
         p_rows: rows
       });
       if (error) throw error;

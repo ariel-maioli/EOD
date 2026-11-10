@@ -855,8 +855,8 @@ begin
     select role into v_profile_role
     from public.profiles
     where id = p_assigned_to;
-    if not found or v_profile_role <> 'technician' then
-        raise exception 'The selected technician does not exist';
+    if not found or v_profile_role not in ('technician', 'admin') then
+        raise exception 'The selected responsible user does not exist';
     end if;
 
     for v_row, v_ordinality in
