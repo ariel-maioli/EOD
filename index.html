@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.10">
+  <link rel="stylesheet" href="styles.css?v=20261110.16">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.10" defer></script>
+  <script src="app.js?v=20261110.16" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -241,18 +241,20 @@
 
         <div class="card">
           <div class="eyebrow">Seguimiento</div>
-          <div class="section-heading">
-            <h2>Inventario</h2>
-            <label class="field property-status-filter" for="property-status-filter">
-              <span>Estado</span>
-              <select id="property-status-filter">
+          <div class="section-heading property-inventory-heading">
+            <h2>Inventario <span id="property-inventory-total"></span></h2>
+            <div class="property-inventory-filters">
+              <select id="property-status-filter" aria-label="Filtrar por estado">
                 <option value="all">Todos</option>
                 <option value="unassigned">Sin asignar</option>
-                <option value="pending">Pendientes</option>
+                <option value="pending" selected>Pendientes</option>
                 <option value="visited">Visitados</option>
                 <option value="archived">Archivados</option>
               </select>
-            </label>
+              <select id="property-technician-filter" aria-label="Filtrar por técnico o administrador">
+                <option value="">Todos los responsables</option>
+              </select>
+            </div>
           </div>
           <div id="property-inventory" class="property-inventory" aria-live="polite"></div>
         </div>

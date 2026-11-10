@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.10";
+  const APP_VERSION = "20261110.16";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -1075,6 +1075,21 @@
       importAssignee.value = selectedImportAssignee;
     }
 
+    const technicianFilter = byId("property-technician-filter");
+    const selectedTechnician = technicianFilter.value;
+    const technicians = state.profiles
+      .filter((profile) => profile.role === "technician" || profile.role === "admin")
+      .slice()
+      .sort((left, right) => profileName(left.id).localeCompare(profileName(right.id), "es"));
+    technicianFilter.innerHTML = [
+      '<option value="">Todos los responsables</option>',
+      ...technicians.map((profile) =>
+        `<option value="${escapeHtml(profile.id)}">${escapeHtml(profileName(profile.id))}${profile.role === "admin" ? " · Admin" : ""}</option>`)
+    ].join("");
+    if (technicians.some((profile) => profile.id === selectedTechnician)) {
+      technicianFilter.value = selectedTechnician;
+    }
+
     const rate = Number(state.trackingSettings.visits_per_workday) || 2;
     const alertDays = Number(state.trackingSettings.alert_days) || 15;
     byId("visits-per-workday").value = String(rate);
@@ -1136,16 +1151,21 @@
       : '<div class="empty-state">No hay responsables dentro del umbral de alerta configurado.</div>';
 
     const filter = byId("property-status-filter").value;
+    const technicianId = technicianFilter.value;
     const inventory = state.properties.filter((property) => {
-      if (filter === "archived") return Boolean(property.archived_at);
-      if (property.archived_at) return false;
+      const isArchived = Boolean(property.archived_at);
+      if (filter === "archived" ? !isArchived : isArchived) return false;
       const assignment = latestAssignment.get(property.property_number);
+      if (technicianId && assignment?.assigned_to !== technicianId) return false;
+      if (filter === "archived") return true;
       if (filter === "pending") return Boolean(assignment && !assignment.closed_at);
       if (filter === "visited") return Boolean(assignment?.completed_at);
       if (filter === "unassigned") return !assignment;
       return true;
     }).sort((left, right) => left.property_number - right.property_number);
 
+    byId("property-inventory-total").textContent =
+      `(${inventory.length} ${inventory.length === 1 ? "visita" : "visitas"})`;
     byId("property-inventory").innerHTML = inventory.length
       ? inventory.map((property) => {
         const assignment = latestAssignment.get(property.property_number);
@@ -1641,6 +1661,15 @@
       return;
     }
 
+    const uniquePropertyNumbers = [...new Set(propertyNumbers)];
+    const validPropertyNumbers = uniquePropertyNumbers.filter((token) => /^[1-9][0-9]{5}$/.test(token));
+    const uniqueVisitsCount = validPropertyNumbers.length;
+
+    // Confirmación inicial mostrando la cantidad de visitas
+    if (!window.confirm(`Se marcarán como abonadas ${uniqueVisitsCount} visita(s) ¿desea continuar?`)) {
+      return;
+    }
+
     clearNotice();
     setBusy(true);
     const processed = [];
@@ -1882,6 +1911,7 @@
     byId("visit-import-form").addEventListener("submit", importVisits);
     byId("visit-import-template").addEventListener("click", downloadVisitImportTemplate);
     byId("property-status-filter").addEventListener("change", renderPropertiesPanel);
+    byId("property-technician-filter").addEventListener("change", renderPropertiesPanel);
     byId("sign-out").addEventListener("click", async () => {
       setBusy(true);
       try {

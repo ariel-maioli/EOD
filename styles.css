@@ -78,7 +78,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .form-grid, .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
 .filters { grid-template-columns: 2fr repeat(2, 1fr); align-items: end; }
 .field { display: grid; align-content: start; gap: 7px; min-width: 0; font-size: .92rem; font-weight: 650; }
-.field input, .field textarea, .field select, .stack input {
+.field input, .field textarea, .field select, .stack input, .property-inventory-filters select {
   width: 100%;
   min-height: 45px;
   padding: 10px 12px;
@@ -89,7 +89,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   font: inherit;
 }
 .field textarea { resize: vertical; }
-.field input:focus, .field textarea:focus, .field select:focus, .stack input:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
+.field input:focus, .field textarea:focus, .field select:focus, .stack input:focus, .property-inventory-filters select:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
 .payments-form { max-width: 620px; margin: 20px 0 28px; }
 .payments-form textarea { width: 100%; padding: 11px 12px; border: 1px solid #c8d5db; border-radius: 9px; color: var(--ink); font: inherit; resize: vertical; }
 .payments-form textarea:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
@@ -170,7 +170,10 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .payments-import { margin: 22px 0; padding-top: 18px; border-top: 1px solid var(--line); }
 .payments-import > h3 { margin: 0 0 8px; }
 .payments-import > p { max-width: 760px; }
-.property-status-filter { width: min(220px, 100%); }
+.property-inventory-heading { gap: 12px; }
+.property-inventory-heading h2 { flex: 0 0 auto; margin-bottom: 0; white-space: nowrap; }
+.property-inventory-filters { display: flex; flex: 1 1 auto; justify-content: flex-end; gap: 12px; min-width: 0; }
+.property-inventory-filters select { flex: 1 1 0; width: 100%; max-width: 220px; min-width: 0; }
 .property-inventory { display: grid; margin-top: 16px; }
 .property-inventory-row { display: grid; grid-template-columns: minmax(70px, .7fr) minmax(110px, .9fr) minmax(130px, 1.4fr) minmax(90px, .8fr); align-items: center; gap: 10px; padding: 11px 8px; border-bottom: 1px solid var(--line); }
 .property-inventory-row > span { color: var(--muted); font-size: .88rem; }
@@ -213,7 +216,8 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   .contact-action { width: 27px; height: 27px; }
   .property-inventory-row { grid-template-columns: minmax(60px, .6fr) minmax(92px, .8fr) minmax(95px, 1.2fr); gap: 7px; font-size: .88rem; }
   .property-inventory-row > span:last-child { display: none; }
-  .property-status-filter { width: 100%; }
+  .property-inventory-heading { gap: 8px; }
+  .property-inventory-filters { gap: 8px; }
 }
 
 @media (max-width: 800px) {
