@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.4";
+  const APP_VERSION = "20261110.5";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -232,7 +232,7 @@
     return semicolons > commas ? ";" : ",";
   }
 
-  function parseCsv(text) {
+  function parseCsv(text, importType = "visits") {
     const source = text.replace(/^\uFEFF/, "");
     const delimiter = csvDelimiter(source);
     const records = [];
@@ -271,13 +271,18 @@
     if (!records.length) throw new Error("El archivo CSV está vacío.");
 
     const normalizeHeader = (value) => normalize(value).trim().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    const headerAliases = {
-      property_number: ["predio", "numero_predio", "nro_predio"],
-      notes: ["notas"],
-      visit_date: ["fecha"],
-      contact_name: ["contacto", "nombre", "nombre_contacto"],
-      cellphone: ["celular", "telefono", "teléfono"]
-    };
+    const headerAliases = importType === "payments"
+      ? {
+        property_number: ["predio", "numero_predio", "nro_predio"],
+        payment_date: ["fecha", "fecha_pago", "fecha_de_pago"]
+      }
+      : {
+        property_number: ["predio", "numero_predio", "nro_predio"],
+        notes: ["notas"],
+        visit_date: ["fecha"],
+        contact_name: ["contacto", "nombre", "nombre_contacto"],
+        cellphone: ["celular", "telefono", "teléfono"]
+      };
     const header = records[0].map(normalizeHeader);
     const indexes = {};
     for (const [fieldName, aliases] of Object.entries(headerAliases)) {
@@ -287,6 +292,7 @@
       property_number: "Predio",
       notes: "Notas",
       visit_date: "Fecha",
+      payment_date: "Fecha",
       contact_name: "Contacto",
       cellphone: "Celular"
     })[fieldName]);
@@ -295,6 +301,9 @@
     }
     if (new Set(Object.values(indexes)).size !== Object.values(indexes).length) {
       throw new Error("El encabezado contiene columnas repetidas.");
+    }
+    if (importType === "payments" && header.length !== 2) {
+      throw new Error("El CSV de pagos debe tener exactamente dos columnas: Predio y Fecha.");
     }
     if (records.length - 1 > 2000) throw new Error("El archivo supera el límite de 2.000 filas.");
 
@@ -313,16 +322,22 @@
 
     return records.slice(1).map((cells, index) => {
       const item = (name) => cells[indexes[name]]?.trim() || "";
-      return {
+      const base = {
         row_number: index + 2,
         property_number: item("property_number"),
-        notes: item("notes"),
-        visit_date: parseDate(item("visit_date")),
-        contact_name: item("contact_name"),
-        cellphone: item("cellphone"),
         ...(cells.length !== header.length
           ? { parse_error: "La fila no tiene la misma cantidad de columnas que el encabezado." }
           : {})
+      };
+      if (importType === "payments") {
+        return { ...base, payment_date: parseDate(item("payment_date")) };
+      }
+      return {
+        ...base,
+        notes: item("notes"),
+        visit_date: parseDate(item("visit_date")),
+        contact_name: item("contact_name"),
+        cellphone: item("cellphone")
       };
     });
   }
@@ -642,6 +657,8 @@
     byId("properties-tab").hidden = !adminFeaturesEnabled;
     byId("export-actions").hidden = !adminFeaturesEnabled;
     byId("payments-form").hidden = !adminFeaturesEnabled;
+    byId("payments-import-section").hidden = !adminFeaturesEnabled;
+    byId("payment-import-form").hidden = !adminFeaturesEnabled;
     byId("filter-user-field").hidden = !adminFeaturesEnabled;
     byId("filter-status-field").hidden = !adminFeaturesEnabled;
     byId("payments-info").textContent = adminFeaturesEnabled
@@ -1006,6 +1023,39 @@
       `];
     });
     byId("visit-import-result").innerHTML = summaries.length
+      ? `<div class="import-result-summary">${summaries.join("")}</div>`
+      : '<div class="empty-state">No se recibieron resultados de la importación.</div>';
+  }
+
+  function renderPaymentImportResult(result) {
+    const groups = [
+      ["imported", "Pagos importados"],
+      ["invalid", "Datos inválidos"],
+      ["future", "Fecha futura"],
+      ["duplicate_in_file", "Predio repetido en el archivo"],
+      ["not_found", "Predio inexistente"],
+      ["property_archived", "Predio archivado"],
+      ["no_visit", "Sin visita activa"],
+      ["already_paid", "Visita ya abonada"],
+      ["errors", "Errores"]
+    ];
+    const summaries = groups.flatMap(([key, label]) => {
+      const entries = result[key] || [];
+      if (!entries.length) return [];
+      const lines = entries.map((entry) => {
+        const property = entry.property ? ` · Predio ${entry.property}` : "";
+        const date = entry.payment_date ? ` · Fecha abonada ${formatDate(entry.payment_date)}` : "";
+        const reason = entry.reason ? `: ${entry.reason}` : "";
+        return `<li>Fila ${escapeHtml(entry.row)}${escapeHtml(property)}${escapeHtml(date)}${escapeHtml(reason)}</li>`;
+      }).join("");
+      return [`
+        <section class="import-result-group">
+          <h3>${escapeHtml(label)} (${entries.length})</h3>
+          <ul>${lines}</ul>
+        </section>
+      `];
+    });
+    byId("payment-import-result").innerHTML = summaries.length
       ? `<div class="import-result-summary">${summaries.join("")}</div>`
       : '<div class="empty-state">No se recibieron resultados de la importación.</div>';
   }
@@ -1657,6 +1707,81 @@
     showNotice(`Proceso finalizado: ${markedCount} visita(s) marcada(s) como abonadas.${stopMessage}`);
   }
 
+  async function importPayments(event) {
+    event.preventDefault();
+    if (!canUseAdminFeatures() || state.busy) return;
+
+    const file = byId("payment-import-file").files[0];
+    if (!file) {
+      showNotice("Seleccioná un archivo CSV.", true);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showNotice("El archivo supera el límite de 5 MB.", true);
+      return;
+    }
+
+    let rows;
+    try {
+      rows = parseCsv(await file.text(), "payments");
+    } catch (error) {
+      showNotice(error.message || "No se pudo leer el archivo CSV de pagos.", true);
+      return;
+    }
+    if (!rows.length) {
+      showNotice("El archivo no contiene pagos.", true);
+      return;
+    }
+    if (!window.confirm(
+      `Se revisarán ${rows.length} filas de pagos. ` +
+      "Se asignará la fecha del CSV a la visita activa más reciente de cada predio. " +
+      "Las filas inválidas o que no se puedan aplicar se informarán sin cancelar las demás. ¿Continuar?"
+    )) return;
+
+    byId("payment-import-result").innerHTML = "";
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.rpc("import_payments", {
+        p_rows: rows
+      });
+      if (error) throw error;
+      if (!data || !Array.isArray(data.imported)) {
+        throw new Error("Supabase devolvió un resultado inesperado al importar pagos.");
+      }
+      renderPaymentImportResult(data);
+      byId("payment-import-file").value = "";
+      const importedCount = data.imported.length;
+      const skippedCount = rows.length - importedCount;
+      const completionMessage =
+        `Importación finalizada: ${importedCount} ${importedCount === 1 ? "pago importado" : "pagos importados"}` +
+        `${skippedCount ? ` y ${skippedCount} ${skippedCount === 1 ? "fila no importada" : "filas no importadas"}` : ""}.`;
+      try {
+        await loadData();
+        showNotice(completionMessage);
+      } catch (error) {
+        showNotice(`${completionMessage} No se pudo actualizar el panel: ${humanError(error)}`, true);
+      }
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadPaymentImportTemplate() {
+    const content = "\uFEFFPredio,Fecha\r\n";
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "plantilla-importacion-pagos.csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function correctPayment(visitId) {
     if (!canUseAdminFeatures() || state.busy) return;
     const visit = state.visits.find((item) => item.id === visitId);
@@ -1718,6 +1843,8 @@
 
     byId("visit-form").addEventListener("submit", saveVisit);
     byId("payments-form").addEventListener("submit", processPayments);
+    byId("payment-import-form").addEventListener("submit", importPayments);
+    byId("payment-import-template").addEventListener("click", downloadPaymentImportTemplate);
     byId("property-add-form").addEventListener("submit", addProperties);
     byId("property-assign-form").addEventListener("submit", assignProperties);
     byId("property-settings-form").addEventListener("submit", savePropertyTrackingSettings);

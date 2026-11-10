@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261110.4">
+  <link rel="stylesheet" href="styles.css?v=20261110.5">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261110.4" defer></script>
+  <script src="app.js?v=20261110.5" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -292,6 +292,21 @@
             <textarea id="payment-property-list" rows="3" placeholder="Ej.: 123456, 234567, 345678"></textarea>
             <button class="button button-primary" type="submit">Procesar pagos</button>
           </form>
+          <div id="payments-import-section" class="payments-import" hidden>
+            <h3>Importar pagos desde CSV</h3>
+            <p class="muted">El archivo debe tener exactamente las columnas <strong>Predio</strong> y <strong>Fecha</strong>, con fecha DD/MM/AAAA. Se asigna esa fecha a la visita activa más reciente de cada predio; si hay filas inválidas o repetidas, se informan y se continúa con las demás. Máximo 2.000 filas y 5 MB.</p>
+            <form id="payment-import-form" class="stack payments-form" hidden>
+              <label class="field" for="payment-import-file">
+                <span>Archivo CSV de pagos</span>
+                <input id="payment-import-file" type="file" accept=".csv,text/csv" required>
+              </label>
+              <div class="form-actions">
+                <button class="button button-primary" type="submit">Revisar e importar pagos</button>
+                <button id="payment-import-template" class="button button-secondary" type="button">Descargar plantilla CSV</button>
+              </div>
+            </form>
+            <div id="payment-import-result" class="property-operation-result" aria-live="polite"></div>
+          </div>
           <div class="payment-columns">
             <section class="payment-column" aria-labelledby="paid-visits-heading">
               <div class="payments-history-heading">

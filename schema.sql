@@ -1139,6 +1139,191 @@ begin
 end;
 $$;
 
+create or replace function public.import_payments(p_rows jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_row jsonb;
+    v_ordinality bigint;
+    v_row_number integer;
+    v_property_text text;
+    v_property_number integer;
+    v_payment_date date;
+    v_visit_id uuid;
+    v_paid_at timestamptz;
+    v_seen_properties text[] := array[]::text[];
+    v_imported jsonb := '[]'::jsonb;
+    v_invalid jsonb := '[]'::jsonb;
+    v_future jsonb := '[]'::jsonb;
+    v_duplicate_in_file jsonb := '[]'::jsonb;
+    v_not_found jsonb := '[]'::jsonb;
+    v_archived jsonb := '[]'::jsonb;
+    v_no_visit jsonb := '[]'::jsonb;
+    v_already_paid jsonb := '[]'::jsonb;
+    v_errors jsonb := '[]'::jsonb;
+    v_property_archived_at timestamptz;
+begin
+    if auth.uid() is null or not public.is_admin() then
+        raise exception 'Only an admin can import payments';
+    end if;
+    if not public.application_access_allowed() then
+        raise exception 'The application is in maintenance mode';
+    end if;
+    if p_rows is null or jsonb_typeof(p_rows) <> 'array' then
+        raise exception 'The import rows must be a JSON array';
+    end if;
+    if jsonb_array_length(p_rows) > 2000 then
+        raise exception 'Import at most 2000 payments at a time';
+    end if;
+
+    for v_row, v_ordinality in
+        select item.value, item.ordinality
+        from jsonb_array_elements(p_rows) with ordinality as item(value, ordinality)
+    loop
+        begin
+            v_row_number := coalesce((v_row ->> 'row_number')::integer, v_ordinality::integer + 1);
+        exception when others then
+            v_row_number := v_ordinality::integer + 1;
+        end;
+
+        v_property_text := btrim(coalesce(v_row ->> 'property_number', ''));
+        if coalesce(v_row ->> 'parse_error', '') <> '' then
+            v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_text,
+                'reason', v_row ->> 'parse_error'
+            ));
+            continue;
+        end if;
+
+        if v_property_text !~ '^[1-9][0-9]{5}$' then
+            v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_text,
+                'reason', 'El predio debe tener 6 dígitos y no comenzar con 0.'
+            ));
+            continue;
+        end if;
+        v_property_number := v_property_text::integer;
+
+        begin
+            if coalesce(v_row ->> 'payment_date', '') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+                raise exception using errcode = '22007';
+            end if;
+            v_payment_date := (v_row ->> 'payment_date')::date;
+        exception
+            when others then
+                v_invalid := v_invalid || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', 'La fecha de pago no es válida.'
+                ));
+                continue;
+        end;
+
+        if v_payment_date > (now() at time zone 'America/Argentina/Buenos_Aires')::date then
+            v_future := v_future || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'La fecha de pago no puede ser futura.'
+            ));
+            continue;
+        end if;
+
+        if v_property_number::text = any(v_seen_properties) then
+            v_duplicate_in_file := v_duplicate_in_file || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El archivo solo puede incluir una fila por predio.'
+            ));
+            continue;
+        end if;
+        v_seen_properties := array_append(v_seen_properties, v_property_number::text);
+
+        select archived_at
+        into v_property_archived_at
+        from public.properties
+        where property_number = v_property_number
+        for update;
+        if not found then
+            v_not_found := v_not_found || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El predio no existe.'
+            ));
+            continue;
+        end if;
+        if v_property_archived_at is not null then
+            v_archived := v_archived || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El predio está archivado.'
+            ));
+            continue;
+        end if;
+
+        select id, paid_at
+        into v_visit_id, v_paid_at
+        from public.visits
+        where property_number = v_property_number
+          and archived_at is null
+        order by visit_date desc, created_at desc
+        limit 1
+        for update;
+        if not found then
+            v_no_visit := v_no_visit || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'El predio no tiene visitas activas.'
+            ));
+            continue;
+        end if;
+        if v_paid_at is not null then
+            v_already_paid := v_already_paid || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'reason', 'La visita más reciente ya figura abonada.'
+            ));
+            continue;
+        end if;
+
+        begin
+            update public.visits
+            set paid_at = v_payment_date::timestamp at time zone 'America/Argentina/Buenos_Aires'
+            where id = v_visit_id;
+
+            v_imported := v_imported || jsonb_build_array(jsonb_build_object(
+                'row', v_row_number,
+                'property', v_property_number,
+                'payment_date', v_payment_date
+            ));
+        exception
+            when others then
+                v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+                    'row', v_row_number,
+                    'property', v_property_number,
+                    'reason', sqlerrm
+                ));
+        end;
+    end loop;
+
+    return jsonb_build_object(
+        'imported', v_imported,
+        'invalid', v_invalid,
+        'future', v_future,
+        'duplicate_in_file', v_duplicate_in_file,
+        'not_found', v_not_found,
+        'property_archived', v_archived,
+        'no_visit', v_no_visit,
+        'already_paid', v_already_paid,
+        'errors', v_errors
+    );
+end;
+$$;
+
 create or replace function public.get_visible_visit_payments()
 returns table (
     visit_id uuid,
@@ -1334,6 +1519,9 @@ revoke all on function public.mark_latest_visit_paid(integer)
     from public, anon;
 grant execute on function public.mark_latest_visit_paid(integer)
     to authenticated;
+
+revoke all on function public.import_payments(jsonb) from public, anon;
+grant execute on function public.import_payments(jsonb) to authenticated;
 
 revoke all on function public.get_visible_visit_payments()
     from public, anon;
