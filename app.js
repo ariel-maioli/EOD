@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.2";
+  const APP_VERSION = "20261110.4";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
   const state = {
@@ -171,11 +171,6 @@
     }).formatToParts(value);
     const part = (type) => parts.find((item) => item.type === type)?.value;
     return `${part("year")}-${part("month")}-${part("day")}`;
-  }
-
-  function isFridayDateKey(dateKey) {
-    const [year, month, day] = dateKey.split("-").map(Number);
-    return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 5;
   }
 
   function formatDateTime(value) {
@@ -832,19 +827,18 @@
       .sort((a, b) => b.paid_at.localeCompare(a.paid_at)
         || b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at));
-    const fridayDate = visiblePaidVisits
+    const latestPaymentDate = visiblePaidVisits
       .map((visit) => argentinaDateKey(new Date(visit.paid_at)))
-      .filter(isFridayDateKey)
       .sort((a, b) => b.localeCompare(a))[0];
-    const paidVisits = fridayDate
-      ? visiblePaidVisits.filter((visit) => argentinaDateKey(new Date(visit.paid_at)) === fridayDate)
+    const paidVisits = latestPaymentDate
+      ? visiblePaidVisits.filter((visit) => argentinaDateKey(new Date(visit.paid_at)) === latestPaymentDate)
       : [];
     const container = byId("payments-list");
-    byId("paid-visits-date").textContent = fridayDate ? formatDate(fridayDate) : "—";
+    byId("paid-visits-date").textContent = latestPaymentDate ? formatDate(latestPaymentDate) : "—";
     byId("paid-visit-count").textContent = `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
 
     if (!paidVisits.length) {
-      container.innerHTML = '<div class="empty-state">Todavía no hay pagos registrados en viernes.</div>';
+      container.innerHTML = '<div class="empty-state">Todavía no hay pagos registrados.</div>';
     } else {
       container.innerHTML = paidVisits.map((visit) => `
         <article class="payment-row${canUseAdminFeatures() ? " payment-row-admin" : ""}">
@@ -861,8 +855,7 @@
       .filter((visit) => {
         const property = propertyFor(visit.property_number);
         return !visit.archived_at
-          && property
-          && !property.archived_at;
+          && (!property || !property.archived_at);
       })
       .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at))
