@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.22";
+  const APP_VERSION = "20261110.23";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -783,12 +783,14 @@
       if (isTechnicianExperience()) {
         const phone = String(visit.cellphone).replace(/\D/g, "");
         const whatsappUrl = `https://wa.me/549${phone}`;
+        const needsContactUpdate = String(visit.contact_name ?? "").trim().toUpperCase() === "COMPLETAR"
+          || ["3411111111", "1111111111"].includes(String(visit.cellphone ?? "").trim());
         const editButton = !isTechnicianPreview() && visit.created_by === state.user?.id
           ? `<button class="contact-action edit-action" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}" aria-label="Editar visita del predio ${escapeHtml(visit.property_number)}" title="Editar visita"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04a1 1 0 0 0 0-1.42l-2.5-2.5a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66Z"/></svg></button>`
           : "";
         return `
-          <article class="search-result-row">
-            <strong>${escapeHtml(visit.property_number)}</strong>
+          <article class="search-result-row${needsContactUpdate ? " search-result-warning" : ""}">
+            <strong>${escapeHtml(visit.property_number)}${needsContactUpdate ? ' <span role="img" aria-label="Contacto o celular pendiente de completar" title="Contacto o celular pendiente de completar">⚠</span>' : ""}</strong>
             <span>${escapeHtml(formatDate(visit.visit_date))}</span>
             <span>${escapeHtml(visit.contact_name)}</span>
             <div class="search-contact">

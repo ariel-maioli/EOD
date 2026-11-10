@@ -113,6 +113,8 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .payment-row-admin { grid-template-columns: minmax(90px, .7fr) minmax(90px, .8fr) minmax(120px, 1fr) auto; }
 .payment-row .button { justify-self: end; }
 .search-result-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.search-result-row.search-result-warning { border-color: #e6c88b; background: #fffaf0; }
+.search-result-warning strong span { color: #76550e; }
 .search-result-row > span { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
 .search-contact { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .search-contact > span { color: var(--muted); font-size: .9rem; }
