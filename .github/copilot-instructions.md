@@ -26,5 +26,4 @@
 
 \- Limítate a modificar los archivos existentes expuestos en el contexto.
 
-
-
+\- Siempre realiza las pruebas en el ambiente de desarrollo, que es file:///C:/ThNet/EOD/index.html?env=dev 
