@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.25";
+  const APP_VERSION = "20261111.27";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -516,7 +516,7 @@
     state.editingId = null;
   }
 
-  const visitColumns = "id,property_number,assignment_id,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
+  const visitColumns = "id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
 
   function orderedVisitsQuery(includeCount = false) {
     return state.client.from("visits")
@@ -771,7 +771,6 @@
   function renderVisits() {
     const results = filteredVisits();
     const container = byId("visit-results");
-    const assignmentsById = new Map(state.assignments.map((assignment) => [assignment.id, assignment]));
     byId("search-default-hint").hidden = searchUsesAllVisits();
     byId("result-count").textContent = `${results.length} ${results.length === 1 ? "visita" : "visitas"}`;
 
@@ -781,17 +780,29 @@
     }
 
     container.innerHTML = results.map((visit) => {
-      if (isTechnicianExperience()) {
-        const phone = String(visit.cellphone).replace(/\D/g, "");
-        const whatsappUrl = `https://wa.me/549${phone}`;
-        const needsContactUpdate = String(visit.contact_name ?? "").trim().toUpperCase() === "COMPLETAR"
-          || ["3411111111", "1111111111"].includes(String(visit.cellphone ?? "").trim());
-        const editButton = !isTechnicianPreview() && visit.created_by === state.user?.id
-          ? `<button class="contact-action edit-action" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}" aria-label="Editar visita del predio ${escapeHtml(visit.property_number)}" title="Editar visita"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04a1 1 0 0 0 0-1.42l-2.5-2.5a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66Z"/></svg></button>`
-          : "";
-        const assignment = assignmentsById.get(visit.assignment_id);
-        const isVisited = assignment ? Boolean(assignment.completed_at) : !visit.assignment_id;
-        return `
+      const technicianExperience = isTechnicianExperience();
+      const phone = String(visit.cellphone).replace(/\D/g, "");
+      const whatsappUrl = `https://wa.me/549${phone}`;
+      const needsContactUpdate = technicianExperience && (
+        String(visit.contact_name ?? "").trim().toUpperCase() === "COMPLETAR"
+        || ["3411111111", "1111111111"].includes(String(visit.cellphone ?? "").trim())
+      );
+      const editIcon = technicianExperience && !isTechnicianPreview() && visit.created_by === state.user?.id
+        ? `<button class="contact-action edit-action" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}" aria-label="Editar visita del predio ${escapeHtml(visit.property_number)}" title="Editar visita"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04a1 1 0 0 0 0-1.42l-2.5-2.5a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66Z"/></svg></button>`
+        : "";
+      const property = propertyFor(visit.property_number);
+      const archived = Boolean(visit.archived_at || property?.archived_at);
+      const parentArchived = Boolean(property?.archived_at);
+      const editButton = canUseAdminFeatures() && !archived
+        ? `<button class="button button-small button-quiet" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}">Editar</button>`
+        : "";
+      const visitButton = canUseAdminFeatures()
+        ? `<button class="button button-small button-secondary" type="button" data-action="toggle-visit" data-id="${escapeHtml(visit.id)}" data-archived="${Boolean(visit.archived_at)}">${visit.archived_at ? "Restaurar visita" : "Archivar visita"}</button>`
+        : "";
+      const propertyButton = canUseAdminFeatures() && property
+        ? `<button class="button button-small button-secondary" type="button" data-action="toggle-property" data-number="${escapeHtml(visit.property_number)}" data-archived="${parentArchived}">${parentArchived ? "Restaurar predio" : "Archivar predio"}</button>`
+        : "";
+      return `
           <article class="search-result-row${needsContactUpdate ? " search-result-warning" : ""}">
             <div class="search-result-primary">
               <strong>${escapeHtml(visit.property_number)}${needsContactUpdate ? ' <span role="img" aria-label="Contacto o celular pendiente de completar" title="Contacto o celular pendiente de completar">⚠</span>' : ""}</strong>
@@ -804,55 +815,20 @@
                 <button class="contact-action copy-action" type="button" data-action="copy-phone" data-phone="${escapeHtml(visit.cellphone)}" aria-label="Copiar celular ${escapeHtml(visit.cellphone)}" title="Copiar celular">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>
                 </button>
-                ${editButton}
+                ${editIcon}
               </div>
             </div>
             <div class="search-result-meta">
               <span>${escapeHtml(formatDate(visit.visit_date))}</span>
-              <span class="property-status ${isVisited ? "status-visitado" : "status-pendiente"}">${isVisited ? "Visitado" : "Pendiente"}</span>
               <span class="state-label${visit.paid_at ? "" : " unpaid"}">${visit.paid_at ? "Abonado" : "Pendiente"}</span>
+              ${!technicianExperience && visit.paid_at ? `<span class="result-meta">Pago: ${escapeHtml(formatPaymentDate(visit.paid_at))}</span>` : ""}
+              ${!technicianExperience ? `<span class="state-label${archived ? " archived" : ""}">${archived ? "Archivado" : "Activo"}</span>
+              <span class="result-meta">Registró ${escapeHtml(profileName(visit.created_by))} · Última edición ${escapeHtml(profileName(visit.updated_by))}</span>` : ""}
             </div>
+            ${!technicianExperience ? `
+              <p class="search-result-notes"><strong>Notas:</strong> ${visit.notes ? escapeHtml(visit.notes) : "Sin notas"}</p>
+              <div class="result-actions">${editButton}${visitButton}${propertyButton}</div>` : ""}
           </article>`;
-      }
-
-      const property = propertyFor(visit.property_number);
-      const archived = Boolean(visit.archived_at || property?.archived_at);
-      const parentArchived = Boolean(property?.archived_at);
-      const canArchiveProperty = canUseAdminFeatures() && property;
-      const visitButton = canUseAdminFeatures()
-        ? `<button class="button button-small button-secondary" type="button" data-action="toggle-visit" data-id="${escapeHtml(visit.id)}" data-archived="${Boolean(visit.archived_at)}">${visit.archived_at ? "Restaurar visita" : "Archivar visita"}</button>`
-        : "";
-      const propertyButton = canArchiveProperty
-        ? `<button class="button button-small button-secondary" type="button" data-action="toggle-property" data-number="${escapeHtml(visit.property_number)}" data-archived="${parentArchived}">${parentArchived ? "Restaurar predio" : "Archivar predio"}</button>`
-        : "";
-      const canEdit = !archived && (
-        canUseAdminFeatures()
-        || (!isAdmin() && visit.created_by === state.user?.id)
-      );
-      const editButton = canEdit
-        ? `<button class="button button-small button-quiet" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}">Editar</button>`
-        : "";
-      const canViewPayment = canUseAdminFeatures()
-        || visit.created_by === (isTechnicianPreview() ? state.viewAsTechnicianId : state.user?.id);
-      const paymentStatus = !canViewPayment
-        ? ""
-        : visit.paid_at
-          ? `<p class="result-meta"><span class="state-label">Abonada</span> · ${escapeHtml(formatPaymentDate(visit.paid_at))}</p>`
-          : '<p class="result-meta"><span class="state-label unpaid">Sin abonar</span></p>';
-
-      return `
-        <article class="result-card">
-          <div class="result-top">
-            <h3>Predio ${escapeHtml(visit.property_number)} · ${escapeHtml(formatDate(visit.visit_date))}</h3>
-            <span class="state-label${archived ? " archived" : ""}">${archived ? "Archivado" : "Activo"}</span>
-          </div>
-          <p><strong>Contacto:</strong> ${escapeHtml(visit.contact_name)}</p>
-          <p><strong>Celular:</strong> ${escapeHtml(visit.cellphone)}</p>
-          ${visit.notes ? `<p class="result-notes"><strong>Notas:</strong> ${escapeHtml(visit.notes)}</p>` : ""}
-          ${paymentStatus}
-          <p class="result-meta">Registró ${escapeHtml(profileName(visit.created_by))} · Última edición ${escapeHtml(profileName(visit.updated_by))}</p>
-          <div class="result-actions">${editButton}${visitButton}${propertyButton}</div>
-        </article>`;
     }).join("");
   }
 
