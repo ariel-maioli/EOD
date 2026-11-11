@@ -113,10 +113,15 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .payment-row > span { color: var(--muted); font-size: .88rem; }
 .payment-row-admin { grid-template-columns: minmax(90px, .7fr) minmax(90px, .8fr) minmax(120px, 1fr) auto; }
 .payment-row .button { justify-self: end; }
-.search-result-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.search-result-row { display: grid; gap: 7px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
 .search-result-row.search-result-warning { border-color: #e6c88b; background: #fffaf0; }
 .search-result-warning strong span { color: #76550e; }
-.search-result-row > span { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.search-result-primary, .search-result-meta { display: flex; align-items: center; gap: 8px 14px; }
+.search-result-primary { flex-wrap: wrap; }
+.search-result-primary > strong { flex: 0 0 auto; }
+.search-contact-name { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.search-result-meta { flex-wrap: wrap; }
+.search-result-meta > span:first-child { color: var(--muted); font-size: .9rem; }
 .search-contact { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .search-contact > span { color: var(--muted); font-size: .9rem; }
 .contact-action { display: inline-flex; width: 30px; height: 30px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid #b7cbd2; border-radius: 7px; background: white; color: var(--primary-dark); text-decoration: none; cursor: pointer; }
@@ -225,7 +230,8 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
   .payment-row { gap: 6px 10px; padding: 8px; font-size: .9rem; }
   .payment-row-admin { grid-template-columns: minmax(62px, .7fr) minmax(70px, .8fr) minmax(80px, 1fr) auto; }
   .payment-row .button { padding-inline: 8px; }
-  .search-result-row { grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 8px; font-size: .9rem; }
+  .search-result-row { gap: 6px; padding: 8px; font-size: .9rem; }
+  .search-result-primary, .search-result-meta { gap: 7px 9px; }
   .search-contact { gap: 4px; }
   .search-contact > span { font-size: .8rem; }
   .contact-action { width: 27px; height: 27px; }

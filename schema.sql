@@ -1549,6 +1549,7 @@ revoke select (paid_at, paid_by) on public.visits
 grant select (
     id,
     property_number,
+    assignment_id,
     visit_date,
     contact_name,
     cellphone,

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261110.24";
+  const APP_VERSION = "20261110.25";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -516,7 +516,7 @@
     state.editingId = null;
   }
 
-  const visitColumns = "id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
+  const visitColumns = "id,property_number,assignment_id,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
 
   function orderedVisitsQuery(includeCount = false) {
     return state.client.from("visits")
@@ -771,6 +771,7 @@
   function renderVisits() {
     const results = filteredVisits();
     const container = byId("visit-results");
+    const assignmentsById = new Map(state.assignments.map((assignment) => [assignment.id, assignment]));
     byId("search-default-hint").hidden = searchUsesAllVisits();
     byId("result-count").textContent = `${results.length} ${results.length === 1 ? "visita" : "visitas"}`;
 
@@ -788,20 +789,28 @@
         const editButton = !isTechnicianPreview() && visit.created_by === state.user?.id
           ? `<button class="contact-action edit-action" type="button" data-action="edit" data-id="${escapeHtml(visit.id)}" aria-label="Editar visita del predio ${escapeHtml(visit.property_number)}" title="Editar visita"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04a1 1 0 0 0 0-1.42l-2.5-2.5a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66Z"/></svg></button>`
           : "";
+        const assignment = assignmentsById.get(visit.assignment_id);
+        const isVisited = assignment ? Boolean(assignment.completed_at) : !visit.assignment_id;
         return `
           <article class="search-result-row${needsContactUpdate ? " search-result-warning" : ""}">
-            <strong>${escapeHtml(visit.property_number)}${needsContactUpdate ? ' <span role="img" aria-label="Contacto o celular pendiente de completar" title="Contacto o celular pendiente de completar">⚠</span>' : ""}</strong>
-            <span>${escapeHtml(formatDate(visit.visit_date))}</span>
-            <span>${escapeHtml(visit.contact_name)}</span>
-            <div class="search-contact">
-              <span>${escapeHtml(visit.cellphone)}</span>
-              <a class="contact-action whatsapp-action" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Abrir chat de WhatsApp con ${escapeHtml(visit.cellphone)}" title="Abrir WhatsApp">
+            <div class="search-result-primary">
+              <strong>${escapeHtml(visit.property_number)}${needsContactUpdate ? ' <span role="img" aria-label="Contacto o celular pendiente de completar" title="Contacto o celular pendiente de completar">⚠</span>' : ""}</strong>
+              <span class="search-contact-name">${escapeHtml(visit.contact_name)}</span>
+              <div class="search-contact">
+                <span>${escapeHtml(visit.cellphone)}</span>
+                <a class="contact-action whatsapp-action" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Abrir chat de WhatsApp con ${escapeHtml(visit.cellphone)}" title="Abrir WhatsApp">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.5 0 .1 5.4.1 12c0 2.1.6 4.2 1.6 6L0 24l6.2-1.6a12 12 0 0 0 5.9 1.5h.1c6.6 0 12-5.4 12-12a11.8 11.8 0 0 0-3.7-8.4Zm-8.4 18.4c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.3-.4A9.8 9.8 0 1 1 12.1 22Zm5.4-7.3c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1a8.3 8.3 0 0 1-2.5-1.5 9.4 9.4 0 0 1-1.7-2.1c-.2-.3 0-.5.1-.6l.5-.6.3-.5c.1-.2 0-.4 0-.6l-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.2 1.4 3.4c.2.2 2.4 3.7 5.8 5.1.8.3 1.4.5 1.9.6.8.2 1.5.2 2 .1.6-.1 1.8-.8 2-1.5.3-.7.3-1.3.2-1.5 0-.2-.3-.3-.6-.5Z"/></svg>
-              </a>
-              <button class="contact-action copy-action" type="button" data-action="copy-phone" data-phone="${escapeHtml(visit.cellphone)}" aria-label="Copiar celular ${escapeHtml(visit.cellphone)}" title="Copiar celular">
+                </a>
+                <button class="contact-action copy-action" type="button" data-action="copy-phone" data-phone="${escapeHtml(visit.cellphone)}" aria-label="Copiar celular ${escapeHtml(visit.cellphone)}" title="Copiar celular">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>
-              </button>
-              ${editButton}
+                </button>
+                ${editButton}
+              </div>
+            </div>
+            <div class="search-result-meta">
+              <span>${escapeHtml(formatDate(visit.visit_date))}</span>
+              <span class="property-status ${isVisited ? "status-visitado" : "status-pendiente"}">${isVisited ? "Visitado" : "Pendiente"}</span>
+              <span class="state-label${visit.paid_at ? "" : " unpaid"}">${visit.paid_at ? "Abonado" : "Pendiente"}</span>
             </div>
           </article>`;
       }
