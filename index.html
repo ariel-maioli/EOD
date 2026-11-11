@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261111.28">
+  <link rel="stylesheet" href="styles.css?v=20261111.29">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261111.28" defer></script>
+  <script src="app.js?v=20261111.29" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -311,14 +311,28 @@
       <section id="payments-view" class="view-panel" hidden>
         <div class="card">
           <div class="eyebrow">Estado de pagos</div>
-          <div class="activity-heading">
-            <h2>Pagos</h2>
-            <span class="info-tooltip" tabindex="0" aria-label="Información sobre pagos" aria-describedby="payments-info">
-              <span aria-hidden="true">i</span>
-              <span id="payments-info" class="info-tooltip-text" role="tooltip">Consultá visitas abonadas y pendientes. Se muestra cada visita activa sin pagar, incluso si hay varias del mismo predio.</span>
-            </span>
+          <div class="payment-columns">
+            <section class="payment-column" aria-labelledby="paid-visits-heading">
+              <div class="payments-history-heading">
+                <h3 id="paid-visits-heading">Abonados el <span id="paid-visits-date"></span> (<span id="paid-visit-count">0</span>)</h3>
+              </div>
+              <div id="payments-list" class="results-list" aria-live="polite"></div>
+            </section>
+            <section class="payment-column" aria-labelledby="pending-visits-heading">
+              <div class="payments-history-heading">
+                <h3 id="pending-visits-heading">Pendientes (<span id="pending-visit-count">0</span>)</h3>
+              </div>
+              <div id="pending-payments-list" class="results-list" aria-live="polite"></div>
+            </section>
           </div>
           <form id="payments-form" class="stack payments-form" hidden>
+            <div class="activity-heading">
+              <h2>Pagos</h2>
+              <span class="info-tooltip" tabindex="0" aria-label="Información sobre pagos" aria-describedby="payments-info">
+                <span aria-hidden="true">i</span>
+                <span id="payments-info" class="info-tooltip-text" role="tooltip">Ingresá números de predio separados por coma para marcar como abonada la visita pendiente de pago más reciente de cada uno. También podés marcar una visita específica desde la lista de pendientes.</span>
+              </span>
+            </div>
             <label for="payment-property-list">Predios a marcar como abonados</label>
             <textarea id="payment-property-list" rows="3" placeholder="Ej.: 123456, 234567, 345678"></textarea>
             <button class="button button-primary" type="submit">Procesar pagos</button>
@@ -338,26 +352,20 @@
             </form>
             <div id="payment-import-result" class="property-operation-result" aria-live="polite"></div>
           </div>
-          <div class="payment-columns">
-            <section class="payment-column" aria-labelledby="paid-visits-heading">
-              <div class="payments-history-heading">
-                <h3 id="paid-visits-heading">Predios abonados el <span id="paid-visits-date"></span></h3>
-                <span id="paid-visit-count" class="muted"></span>
-              </div>
-              <div id="payments-list" class="results-list" aria-live="polite"></div>
-            </section>
-            <section class="payment-column" aria-labelledby="pending-visits-heading">
-              <div class="payments-history-heading">
-                <h3 id="pending-visits-heading">Pendientes</h3>
-                <span id="pending-visit-count" class="muted"></span>
-              </div>
-              <div id="pending-payments-list" class="results-list" aria-live="polite"></div>
-            </section>
-          </div>
         </div>
       </section>
     </section>
   </main>
+  <dialog id="payment-confirm-dialog" class="help-dialog" aria-labelledby="payment-confirm-title" aria-describedby="payment-confirm-message">
+    <div class="section-heading">
+      <h2 id="payment-confirm-title">Confirmar pago</h2>
+    </div>
+    <p id="payment-confirm-message"></p>
+    <form method="dialog" class="form-actions">
+      <button class="button button-secondary" type="submit" value="cancel" autofocus>Cancelar</button>
+      <button class="button button-primary" type="submit" value="confirm">Confirmar</button>
+    </form>
+  </dialog>
   <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
     <div class="section-heading">
       <h2 id="help-title">Ayuda para técnicos</h2>
@@ -410,7 +418,7 @@
         <summary>Consultar pagos</summary>
         <ol>
           <li>Tocá <strong>Pagos</strong>.</li>
-          <li>En <strong>Predios abonados</strong> verás las visitas pagadas en la última fecha de pago visible. En <strong>Pendientes</strong> están las visitas que todavía no figuran como pagadas.</li>
+          <li>En <strong>Abonados</strong> verás las visitas pagadas en la última fecha de pago visible. En <strong>Pendientes</strong> están las visitas que todavía no figuran como pagadas.</li>
         </ol>
         <p>Si encontrás una diferencia, consultá al administrador. Los pagos los registra el administrador.</p>
       </details>

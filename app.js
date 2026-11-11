@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261111.28";
+  const APP_VERSION = "20261111.29";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -700,10 +700,6 @@
     byId("payment-import-form").hidden = !adminFeaturesEnabled;
     byId("filter-user-field").hidden = !adminFeaturesEnabled;
     byId("filter-status-field").hidden = !adminFeaturesEnabled;
-    byId("payments-info").textContent = adminFeaturesEnabled
-      ? "Ingresar números de predio separados por coma. Se marcará la visita pendiente de pago más reciente de cada uno. También podés marcar una visita específica desde la lista de pendientes."
-      : "Consultá las visitas marcadas como abonadas y la fecha en que se registró el pago.";
-
     byId("visit-form-title").textContent = technicianPreview
       ? "Vista previa del formulario de visita"
       : "Registrar una visita";
@@ -893,7 +889,7 @@
       : [];
     const container = byId("payments-list");
     byId("paid-visits-date").textContent = latestPaymentDate ? formatDate(latestPaymentDate) : "—";
-    byId("paid-visit-count").textContent = `${paidVisits.length} ${paidVisits.length === 1 ? "visita" : "visitas"}`;
+    byId("paid-visit-count").textContent = String(paidVisits.length);
 
     if (!paidVisits.length) {
       container.innerHTML = '<div class="empty-state">Todavía no hay pagos registrados.</div>';
@@ -919,7 +915,7 @@
       .sort((a, b) => b.visit_date.localeCompare(a.visit_date)
         || b.created_at.localeCompare(a.created_at));
     const pendingContainer = byId("pending-payments-list");
-    byId("pending-visit-count").textContent = `${pendingVisits.length} ${pendingVisits.length === 1 ? "visita" : "visitas"}`;
+    byId("pending-visit-count").textContent = String(pendingVisits.length);
 
     if (!pendingVisits.length) {
       pendingContainer.innerHTML = '<div class="empty-state">No hay visitas pendientes de pago.</div>';
@@ -929,9 +925,9 @@
     pendingContainer.innerHTML = pendingVisits.map((visit) => `
       <article class="payment-row${canUseAdminFeatures() ? " payment-row-admin" : ""}">
         <strong>${escapeHtml(visit.property_number)}</strong>
-        <span class="payment-date">${escapeHtml(formatDate(visit.visit_date))}</span>
+        <span class="payment-date">Visita: ${escapeHtml(formatDate(visit.visit_date))}</span>
         ${canUseAdminFeatures() ? `<span class="payment-technician">${escapeHtml(profileName(visit.created_by))}</span>` : ""}
-        ${canUseAdminFeatures() ? `<button class="button button-small button-secondary" type="button" data-action="mark-payment" data-id="${escapeHtml(visit.id)}">Marcar abonada</button>` : ""}
+        ${canUseAdminFeatures() ? `<button class="button button-small button-secondary" type="button" data-action="mark-payment" data-id="${escapeHtml(visit.id)}" aria-label="Abonar la visita del predio ${escapeHtml(visit.property_number)}">Abonar</button>` : ""}
       </article>
     `).join("");
   }
@@ -1769,13 +1765,35 @@
     showNotice(`Proceso finalizado: ${markedCount} visita(s) pendiente(s) marcada(s) como abonada(s).${stopMessage}`);
   }
 
+  async function confirmPayment(message) {
+    const dialog = byId("payment-confirm-dialog");
+    if (dialog.open) {
+      showNotice("Ya hay una confirmación de pago abierta.", true);
+      return false;
+    }
+    byId("payment-confirm-message").textContent = message;
+    dialog.returnValue = "";
+    try {
+      dialog.showModal();
+    } catch (error) {
+      showNotice(`No se pudo mostrar la confirmación de pago. ${humanError(error)}`, true);
+      return false;
+    }
+    return new Promise((resolve) => {
+      dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+    });
+  }
+
   async function markVisitPaid(visitId) {
     if (!canUseAdminFeatures() || state.busy) return;
     const visit = state.visits.find((item) => item.id === visitId);
-    if (!visit || visit.paid_at) return;
-    if (!window.confirm(
-      `¿Querés marcar como abonada la visita del predio ${visit.property_number} ` +
-      `del ${formatDate(visit.visit_date)}?`
+    if (!visit || visit.paid_at) {
+      showNotice("La visita ya no está pendiente de pago. Actualizá la sección para consultar su estado.", true);
+      return;
+    }
+    if (!await confirmPayment(
+      `¿Querés marcar como abonada la visita del predio ${visit.property_number}? ` +
+      "Se registrarán la fecha y hora actuales del servidor."
     )) return;
 
     setBusy(true);
@@ -1795,7 +1813,7 @@
         throw new Error(messages[data?.status] || "Supabase devolvió un resultado inesperado al marcar el pago.");
       }
       await loadData();
-      showNotice(`Se marcó como abonada la visita del predio ${visit.property_number}.`);
+      showNotice(`Se marcó como abonada la visita del predio ${visit.property_number} el ${formatPaymentDate(data.paid_at)}.`);
     } catch (error) {
       showNotice(humanError(error), true);
     } finally {
@@ -1881,8 +1899,15 @@
   async function correctPayment(visitId) {
     if (!canUseAdminFeatures() || state.busy) return;
     const visit = state.visits.find((item) => item.id === visitId);
-    if (!visit?.paid_at) return;
-    if (!window.confirm(`¿Querés quitar la marca de pago del predio ${visit.property_number}? Esta corrección quedará registrada en la auditoría.`)) {
+    if (!visit?.paid_at) {
+      showNotice("La visita ya no figura abonada. Actualizá la sección para consultar su estado.", true);
+      return;
+    }
+    if (!await confirmPayment(
+      `¿Querés quitar la marca de pago de la visita del predio ${visit.property_number}, ` +
+      `abonada el ${formatPaymentDate(visit.paid_at)}? La visita quedará pendiente de pago. ` +
+      "Esta corrección quedará registrada en la auditoría."
+    )) {
       return;
     }
 
@@ -1917,6 +1942,12 @@
   }
 
   function bindEvents() {
+    byId("payment-confirm-dialog").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        byId("payment-confirm-dialog").close();
+      }
+    });
     byId("open-help").addEventListener("click", () => {
       byId("help-dialog").showModal();
     });
