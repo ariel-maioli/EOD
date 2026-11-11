@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261111.27";
+  const APP_VERSION = "20261111.28";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -406,6 +406,15 @@
     return isAdmin() ? "" : state.user?.id || "";
   }
 
+  function activeAssignments() {
+    const activeProperties = new Set(
+      state.properties.filter((property) => !property.archived_at).map((property) => property.property_number)
+    );
+    return state.assignments.filter((assignment) =>
+      !assignment.closed_at && activeProperties.has(assignment.property_number)
+    );
+  }
+
   async function closeSessionForMaintenance() {
     let signOutError = null;
     try {
@@ -684,6 +693,7 @@
     byId("welcome-title").textContent = `${greetingForCurrentTime()}, ${profileName(experienceProfile?.id || state.user?.id)}`;
     byId("activity-tab").hidden = !adminFeaturesEnabled;
     byId("properties-tab").hidden = !adminFeaturesEnabled;
+    byId("pending-properties-card").hidden = !isTechnicianExperience();
     byId("export-actions").hidden = !adminFeaturesEnabled;
     byId("payments-form").hidden = !adminFeaturesEnabled;
     byId("payments-import-section").hidden = !adminFeaturesEnabled;
@@ -771,6 +781,17 @@
   function renderVisits() {
     const results = filteredVisits();
     const container = byId("visit-results");
+    const userId = dataUserId();
+    const pendingProperties = userId
+      ? activeAssignments()
+        .filter((assignment) => assignment.assigned_to === userId)
+        .sort((a, b) => a.property_number - b.property_number)
+      : [];
+    byId("pending-properties-count").textContent = String(pendingProperties.length);
+    byId("pending-properties-list").innerHTML = pendingProperties.length
+      ? `<ul class="pending-properties-list">${pendingProperties.map((assignment) =>
+        `<li class="property-status">${escapeHtml(assignment.property_number)}</li>`).join("")}</ul>`
+      : '<div class="empty-state">No tenés predios pendientes de visitar.</div>';
     byId("search-default-hint").hidden = searchUsesAllVisits();
     byId("result-count").textContent = `${results.length} ${results.length === 1 ? "visita" : "visitas"}`;
 
@@ -1119,23 +1140,18 @@
       .sort((left, right) => left.assigned_at.localeCompare(right.assigned_at));
     const latestAssignment = new Map();
     orderedAssignments.forEach((assignment) => latestAssignment.set(assignment.property_number, assignment));
-    const propertiesByNumber = new Map(
-      state.properties.map((property) => [property.property_number, property])
-    );
-    const activeAssignments = state.assignments.filter((assignment) =>
-      !assignment.closed_at && !propertiesByNumber.get(assignment.property_number)?.archived_at
-    );
+    const pendingAssignments = activeAssignments();
     const pendingByUser = new Map();
     state.assignments.forEach((assignment) => {
       if (!pendingByUser.has(assignment.assigned_to)) pendingByUser.set(assignment.assigned_to, 0);
     });
-    activeAssignments.forEach((assignment) => {
+    pendingAssignments.forEach((assignment) => {
       pendingByUser.set(assignment.assigned_to, (pendingByUser.get(assignment.assigned_to) || 0) + 1);
     });
 
     const total = state.properties.length;
     const archived = state.properties.filter((property) => property.archived_at).length;
-    const pending = activeAssignments.length;
+    const pending = pendingAssignments.length;
     const visited = state.properties.filter((property) =>
       !property.archived_at && latestAssignment.get(property.property_number)?.completed_at
     ).length;

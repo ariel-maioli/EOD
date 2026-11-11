@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261111.27">
+  <link rel="stylesheet" href="styles.css?v=20261111.28">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261111.27" defer></script>
+  <script src="app.js?v=20261111.28" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -174,6 +174,15 @@
           <div id="export-actions" class="export-actions" hidden>
             <button id="export-filtered" class="button button-secondary" type="button">Exportar resultados a CSV</button>
             <button id="export-all" class="button button-quiet" type="button">Exportar todos los activos</button>
+          </div>
+        </div>
+        <div id="pending-properties-card" class="card" hidden>
+          <div class="help-topics">
+            <details>
+              <summary>Predios pendientes de visitar (<span id="pending-properties-count">0</span>)</summary>
+              <p class="muted">Predios actualmente asignados a vos que aún faltan visitar:</p>
+              <div id="pending-properties-list" aria-live="polite"></div>
+            </details>
           </div>
         </div>
         <div id="visit-results" class="results-list" aria-live="polite"></div>
@@ -385,6 +394,7 @@
           <li>En la fila, usá los botones para abrir WhatsApp o copiar el celular.</li>
         </ol>
         <p>Al entrar se muestran tus últimas 25 visitas. Tocá <strong>Limpiar filtros</strong> para ver todas las visitas disponibles.</p>
+        <p>En <strong>Predios pendientes de visitar</strong> podés desplegar los predios que tenés asignados y todavía faltan visitar. La lista no cambia al aplicar filtros de visitas.</p>
         <p>Una fila marcada con <strong>⚠</strong> tiene un contacto o celular pendiente de completar. Si tenés los datos correctos y la visita es tuya, podés corregirlos.</p>
       </details>
       <details>

@@ -151,6 +151,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .notice.error { border-color: #e7caca; background: #fff1f0; color: #852e2e; }
 .notice.success-notice { position: fixed; z-index: 20; right: 16px; bottom: 16px; width: min(520px, calc(100% - 32px)); margin: 0; box-shadow: 0 8px 26px rgb(23 43 58 / 14%); }
 .results-list, .activity-list { display: grid; gap: 12px; }
+.pending-properties-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .result-actions, .activity-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .result-meta { color: var(--muted); font-size: .85rem; }
 .result-actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 15px; }
