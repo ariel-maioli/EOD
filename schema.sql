@@ -103,6 +103,26 @@ create table if not exists public.properties (
     archived_by uuid
 );
 
+create table if not exists public.cue_establishments (
+    cue varchar(9) primary key
+        check (cue ~ '^[0-9]{9}$'),
+    source_property_number integer
+        check (source_property_number between 100000 and 999999),
+    property_number integer
+        references public.properties (property_number),
+    zone text,
+    department text,
+    locality text,
+    nro text,
+    property_type text,
+    property_name text,
+    address text,
+    postal_code text,
+    property_email text,
+    contact_name text,
+    contact_cellphone text
+);
+
 create table if not exists public.visits (
     id uuid primary key default gen_random_uuid(),
     property_number integer not null
@@ -1448,6 +1468,7 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.maintenance_settings enable row level security;
 alter table public.properties enable row level security;
+alter table public.cue_establishments enable row level security;
 alter table public.visits enable row level security;
 alter table public.property_assignments enable row level security;
 alter table public.property_tracking_settings enable row level security;
@@ -1478,6 +1499,12 @@ create policy "properties_update_admin"
 on public.properties for update to authenticated
 using (public.is_admin())
 with check (public.is_admin());
+
+drop policy if exists "cue_establishments_select_admin"
+    on public.cue_establishments;
+create policy "cue_establishments_select_admin"
+on public.cue_establishments for select to authenticated
+using (public.application_access_allowed() and public.is_admin());
 
 drop policy if exists "visits_select_active_or_admin" on public.visits;
 create policy "visits_select_active_or_admin"
@@ -1537,11 +1564,13 @@ create policy "audit_select_admin"
 on public.audit_log for select to authenticated
 using (public.is_admin());
 
-revoke all on public.profiles, public.properties, public.visits, public.audit_log,
+revoke all on public.profiles, public.properties, public.cue_establishments,
+    public.visits, public.audit_log,
     public.property_assignments, public.property_tracking_settings
     from public, anon, authenticated;
 revoke all on public.maintenance_settings from public, anon, authenticated;
-grant select on public.profiles, public.properties, public.audit_log,
+grant select on public.profiles, public.properties, public.cue_establishments,
+    public.audit_log,
     public.property_assignments, public.property_tracking_settings
     to authenticated;
 revoke select (paid_at, paid_by) on public.visits
