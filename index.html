@@ -13,10 +13,10 @@
       document.head.appendChild(manifest);
     }
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261112.2">
+  <link rel="stylesheet" href="styles.css?v=20261112.5">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261112.2" defer></script>
+  <script src="app.js?v=20261112.5" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -115,7 +115,10 @@
             </label>
             <label class="field" for="visit-date">
               <span>Fecha de visita <span class="required">*</span></span>
-              <input id="visit-date" name="visit_date" type="date" required>
+              <div class="date-entry">
+                <input id="visit-date" name="visit_date" type="date" required>
+                <span id="visit-date-display" class="date-value-display" aria-hidden="true"></span>
+              </div>
             </label>
             <label class="field" for="contact-name">
               <span>Nombre de contacto <span class="required">*</span></span>
@@ -167,11 +170,17 @@
             </label>
             <label class="field" for="filter-from">
               <span>Desde</span>
-              <input id="filter-from" type="date">
+              <div class="date-entry">
+                <input id="filter-from" type="date">
+                <span id="filter-from-display" class="date-value-display" aria-hidden="true"></span>
+              </div>
             </label>
             <label class="field" for="filter-to">
               <span>Hasta</span>
-              <input id="filter-to" type="date">
+              <div class="date-entry">
+                <input id="filter-to" type="date">
+                <span id="filter-to-display" class="date-value-display" aria-hidden="true"></span>
+              </div>
             </label>
             <label id="filter-user-field" class="field" for="filter-user">
               <span>Técnico</span>
@@ -394,7 +403,7 @@
         <summary>Cargar una visita</summary>
         <ol>
           <li>Tocá <strong>Nueva visita</strong>.</li>
-          <li>Escribí el número de predio de 6 dígitos y verificá la fecha de visita.</li>
+          <li>Escribí el número de predio de 6 dígitos e ingresá la fecha como <strong>DD/MM/AAAA</strong> o elegila con <strong>Calendario</strong>.</li>
           <li>Completá el nombre de contacto y el celular: exactamente 10 dígitos con código de área, empezando del 1 al 9, sin anteponer 0 ni 15.</li>
           <li>Si hace falta, agregá información interna útil en <strong>Notas</strong> (hasta 250 caracteres).</li>
           <li>Tocá <strong>Guardar visita</strong> y esperá el mensaje de confirmación.</li>

@@ -152,20 +152,49 @@
 
   function setDefaultVisitFilters() {
     const { from, to } = currentArgentinaVisitRange();
-    byId("filter-from").value = from;
-    byId("filter-to").value = to;
+    setDateInputValue("filter-from", from);
+    setDateInputValue("filter-to", to);
     byId("filter-user").value = "";
     byId("filter-status").value = "active";
+  }
+
+  function formatDateInput(value) {
+    const match = String(value ?? "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+  }
+
+  function updateDateInputDisplay(inputId) {
+    const input = byId(inputId);
+    const display = byId(`${inputId}-display`);
+    const date = formatDateInput(input.value);
+    display.textContent = date || "DD/MM/AAAA";
+    display.classList.toggle("date-value-placeholder", !date);
+  }
+
+  function setDateInputValue(inputId, value) {
+    byId(inputId).value = String(value ?? "").slice(0, 10);
+    updateDateInputDisplay(inputId);
   }
 
   function setVisitDateLimit() {
     byId("visit-date").max = localDateInputValue();
   }
 
+  function makeRoomBelowDatePicker(input) {
+    const minimumSpace = 380;
+    const rect = input.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= minimumSpace) return;
+
+    const availableScroll = Math.max(0, rect.top - 8);
+    const scrollAmount = Math.min(availableScroll, minimumSpace - spaceBelow);
+    window.scrollBy(0, scrollAmount);
+  }
+
   function formatDate(value) {
     if (!value) return "Sin fecha";
     const [year, month, day] = value.slice(0, 10).split("-");
-    return `${day}/${month}/${year.slice(-2)}`;
+    return `${day}/${month}/${year}`;
   }
 
   function formatPaymentDate(value) {
@@ -173,7 +202,7 @@
     return new Intl.DateTimeFormat("es-AR", {
       day: "2-digit",
       month: "2-digit",
-      year: "2-digit",
+      year: "numeric",
       timeZone: "America/Argentina/Buenos_Aires"
     }).format(new Date(value));
   }
@@ -191,8 +220,11 @@
 
   function formatDateTime(value) {
     return new Intl.DateTimeFormat("es-AR", {
-      dateStyle: "short",
-      timeStyle: "short"
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     }).format(new Date(value));
   }
 
@@ -1495,7 +1527,7 @@
     byId("session-email").textContent = profileName(data.id);
     setDefaultVisitFilters();
     setVisitDateLimit();
-    byId("visit-date").value = localDateInputValue();
+    setDateInputValue("visit-date", localDateInputValue());
     resetVisitForm();
     setView(isAdmin() ? "search-view" : "form-view");
     await loadData();
@@ -1506,7 +1538,7 @@
   function resetVisitForm() {
     byId("visit-form").reset();
     setVisitDateLimit();
-    byId("visit-date").value = localDateInputValue();
+    setDateInputValue("visit-date", localDateInputValue());
     byId("property-number").disabled = false;
     byId("visit-form-title").textContent = "Registrar una visita";
     byId("save-visit").textContent = "Guardar visita";
@@ -1533,7 +1565,7 @@
     state.editingId = id;
     byId("property-number").value = visit.property_number;
     byId("property-number").disabled = true;
-    byId("visit-date").value = visit.visit_date;
+    setDateInputValue("visit-date", visit.visit_date);
     byId("contact-name").value = visit.contact_name;
     byId("cellphone").value = visit.cellphone;
     byId("notes").value = visit.notes || "";
@@ -2164,6 +2196,20 @@
       });
     });
 
+    ["visit-date", "filter-from", "filter-to"].forEach((id) => {
+      byId(id).addEventListener("click", (event) => {
+        const input = byId(id);
+        const rect = input.getBoundingClientRect();
+        const clickedCalendar = window.matchMedia("(pointer: coarse)").matches
+          || event.detail === 0
+          || event.clientX >= rect.right - 40;
+        if (clickedCalendar) makeRoomBelowDatePicker(input);
+      });
+      ["input", "change"].forEach((eventName) => {
+        byId(id).addEventListener(eventName, () => updateDateInputDisplay(id));
+      });
+    });
+
     ["search-query", "filter-from", "filter-to", "filter-user", "filter-status"].forEach((id) => {
       byId(id).addEventListener(id === "search-query" ? "input" : "change", () => {
         state.searchAllVisits = false;
@@ -2172,9 +2218,10 @@
     });
     byId("clear-search-filters").addEventListener("click", () => {
       state.searchAllVisits = true;
-      ["search-query", "filter-from", "filter-to", "filter-user"].forEach((id) => {
-        byId(id).value = "";
-      });
+      byId("search-query").value = "";
+      setDateInputValue("filter-from", "");
+      setDateInputValue("filter-to", "");
+      byId("filter-user").value = "";
       byId("filter-status").value = canUseAdminFeatures() ? "all" : "active";
       refreshSearchVisits();
     });

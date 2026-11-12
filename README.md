@@ -94,7 +94,7 @@ Verificá que estés en el proyecto Supabase correcto al ejecutar ambos comandos
 
 - El número de predio debe tener seis dígitos, comenzar entre 1 y 9, y no puede estar vacío.
 - El predio debe estar previamente cargado al inventario y asignado al usuario que registra la visita; la visita no crea predios automáticamente.
-- La fecha se propone inicialmente como hoy y no se permiten fechas futuras, tampoco al editar.
+- Las fechas se ingresan y se muestran como `DD/MM/AAAA` en toda la aplicación. La fecha de visita se propone inicialmente como hoy y no se permiten fechas futuras, tampoco al editar.
 - El contacto es obligatorio (hasta 50 caracteres); el celular es obligatorio y debe tener 10 dígitos, sin prefijo `0` ni `15`; las notas son opcionales (hasta 250 caracteres) y pueden incluir información útil para futuras visitas o auditorías.
 - Solo puede existir una visita por predio y fecha.
 - Desde **Predios → Importar visitas desde CSV**, el administrador puede cargar visitas en lote a nombre de un técnico o administrador. El archivo debe incluir `Predio`, `Notas`, `Fecha`, `Contacto` y `Celular`; la fecha se escribe como `DD/MM/AAAA`. Se puede descargar una plantilla vacía desde el panel. Se aceptan archivos UTF-8 y Windows-1252; las filas con datos inválidos, predios inexistentes/archivados/sin asignación activa o una visita ya existente se informan y no detienen la importación de las demás. En las visitas aceptadas, contacto y notas que exceden sus límites se truncan, y el resumen indica los campos truncados. Cada predio debe aparecer como máximo una vez en el archivo y la visita aceptada completa su asignación activa.

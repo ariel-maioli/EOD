@@ -92,6 +92,18 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 }
 .field textarea { resize: vertical; }
 .field input:focus, .field textarea:focus, .field select:focus, .stack input:focus, .property-inventory-filters select:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
+.date-entry { position: relative; }
+.date-value-display { position: absolute; top: 50%; left: 16px; z-index: 1; transform: translateY(-50%); color: var(--ink); font: inherit; line-height: 1; pointer-events: none; }
+.date-value-placeholder { color: var(--muted); }
+.date-entry input[type="date"]::-webkit-datetime-edit,
+.date-entry input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.date-entry input[type="date"]::-webkit-datetime-edit-text,
+.date-entry input[type="date"]::-webkit-datetime-edit-day-field,
+.date-entry input[type="date"]::-webkit-datetime-edit-month-field,
+.date-entry input[type="date"]::-webkit-datetime-edit-year-field {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
 .payments-form { max-width: 620px; margin: 20px 0 28px; }
 .payments-form textarea { width: 100%; padding: 11px 12px; border: 1px solid #c8d5db; border-radius: 9px; color: var(--ink); font: inherit; resize: vertical; }
 .payments-form textarea:focus { outline: 3px solid rgb(14 100 117 / 15%); border-color: var(--primary); }
