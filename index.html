@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#164e63">
   <title>EOD | Registro de visitas</title>
-  <link rel="stylesheet" href="styles.css?v=20261111.32">
+  <link rel="stylesheet" href="styles.css?v=20261111.34">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261111.32" defer></script>
+  <script src="app.js?v=20261111.34" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -133,6 +133,15 @@
       </section>
 
       <section id="search-view" class="view-panel" hidden>
+        <div id="pending-properties-card" class="card" hidden>
+          <div class="help-topics">
+            <details>
+              <summary>Predios pendientes de visitar (<span id="pending-properties-count">0</span>)</summary>
+              <p class="muted">Predios actualmente asignados a vos que aún faltan visitar:</p>
+              <div id="pending-properties-list" aria-live="polite"></div>
+            </details>
+          </div>
+        </div>
         <div class="card">
           <div class="section-heading">
             <div>
@@ -174,15 +183,6 @@
           <div id="export-actions" class="export-actions" hidden>
             <button id="export-filtered" class="button button-secondary" type="button">Exportar resultados a CSV</button>
             <button id="export-all" class="button button-quiet" type="button">Exportar todos los activos</button>
-          </div>
-        </div>
-        <div id="pending-properties-card" class="card" hidden>
-          <div class="help-topics">
-            <details>
-              <summary>Predios pendientes de visitar (<span id="pending-properties-count">0</span>)</summary>
-              <p class="muted">Predios actualmente asignados a vos que aún faltan visitar:</p>
-              <div id="pending-properties-list" aria-live="polite"></div>
-            </details>
           </div>
         </div>
         <div id="visit-results" class="results-list" aria-live="polite"></div>

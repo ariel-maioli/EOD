@@ -213,7 +213,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .help-dialog::backdrop { background: rgb(23 43 58 / 55%); }
 .help-dialog .section-heading h2 { margin: 0; }
 .help-dialog > p { margin: 10px 0 16px; }
-.help-topics details { border-top: 1px solid var(--line); line-height: 1.5; }
+.help-topics > details { border-top: 1px solid var(--line); line-height: 1.5; }
 .help-topics summary { padding: 14px 0; color: var(--primary-dark); font-weight: 700; cursor: pointer; }
 .help-topics summary:focus-visible { outline: 3px solid rgb(14 100 117 / 20%); outline-offset: 2px; }
 .help-topics ol { padding-left: 24px; }

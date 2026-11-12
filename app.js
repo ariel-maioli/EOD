@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261111.32";
+  const APP_VERSION = "20261111.34";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -780,15 +780,12 @@
 
   function renderCueEstablishment(cue) {
     const fields = [
-      ["Establecimiento", cue.property_name],
-      ["Tipo", cue.property_type],
+      ["Nombre", cue.property_name],
       ["Domicilio", cue.address],
       ["Localidad", cue.locality],
-      ["Departamento", cue.department],
-      ["Zona", cue.zone],
-      ["Código postal", cue.postal_code],
+      ["CP", cue.postal_code],
       ["Contacto", cue.contact_name],
-      ["Correo", cue.property_email]
+      ["email", cue.property_email]
     ].filter(([, value]) => String(value ?? "").trim());
     const cellphone = String(cue.contact_cellphone ?? "").trim();
 
