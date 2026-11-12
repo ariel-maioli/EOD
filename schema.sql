@@ -1502,9 +1502,29 @@ with check (public.is_admin());
 
 drop policy if exists "cue_establishments_select_admin"
     on public.cue_establishments;
-create policy "cue_establishments_select_admin"
+drop policy if exists "cue_establishments_select_admin_or_assignee"
+    on public.cue_establishments;
+create policy "cue_establishments_select_admin_or_assignee"
 on public.cue_establishments for select to authenticated
-using (public.application_access_allowed() and public.is_admin());
+using (
+    public.application_access_allowed()
+    and (
+        public.is_admin()
+        or (
+            property_number is not null
+            and exists (
+                select 1
+                from public.properties as property
+                where property.property_number = cue_establishments.property_number
+                  and property.archived_at is null
+                  and public.has_active_property_assignment(
+                      property.property_number,
+                      auth.uid()
+                  )
+            )
+        )
+    )
+);
 
 drop policy if exists "visits_select_active_or_admin" on public.visits;
 create policy "visits_select_active_or_admin"

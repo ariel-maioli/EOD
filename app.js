@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261111.29";
+  const APP_VERSION = "20261111.32";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -13,6 +13,7 @@
     visits: [],
     paymentDetails: new Map(),
     properties: [],
+    cueEstablishments: [],
     assignments: [],
     profiles: [],
     trackingSettings: { visits_per_workday: 2, alert_days: 15 },
@@ -518,6 +519,7 @@
     state.visits = [];
     state.paymentDetails = new Map();
     state.properties = [];
+    state.cueEstablishments = [];
     state.assignments = [];
     state.profiles = [];
     state.trackingSettings = { visits_per_workday: 2, alert_days: 15 };
@@ -589,10 +591,11 @@
   }
 
   async function loadData() {
-    const [paymentsResult, properties, assignments, profilesResult, settingsResult] = await Promise.all([
+    const [paymentsResult, properties, assignments, cueEstablishments, profilesResult, settingsResult] = await Promise.all([
       state.client.rpc("get_visible_visit_payments"),
       fetchAllRows("properties", "property_number"),
       fetchAllRows("property_assignments", "assigned_at"),
+      fetchAllRows("cue_establishments", "cue"),
       state.client.from("profiles").select("id,email,display_name,role"),
       isAdmin() ? state.client.rpc("get_property_tracking_settings") : Promise.resolve({ data: null, error: null })
     ]);
@@ -604,6 +607,7 @@
       (paymentsResult.data || []).map((payment) => [payment.visit_id, payment])
     );
     state.properties = properties;
+    state.cueEstablishments = cueEstablishments;
     state.assignments = assignments;
     state.profiles = profilesResult.data || [];
     if (settingsResult.data) state.trackingSettings = settingsResult.data;
@@ -774,6 +778,83 @@
       || b.created_at.localeCompare(a.created_at));
   }
 
+  function renderCueEstablishment(cue) {
+    const fields = [
+      ["Establecimiento", cue.property_name],
+      ["Tipo", cue.property_type],
+      ["Domicilio", cue.address],
+      ["Localidad", cue.locality],
+      ["Departamento", cue.department],
+      ["Zona", cue.zone],
+      ["Código postal", cue.postal_code],
+      ["Contacto", cue.contact_name],
+      ["Correo", cue.property_email]
+    ].filter(([, value]) => String(value ?? "").trim());
+    const cellphone = String(cue.contact_cellphone ?? "").trim();
+
+    return `
+      <article class="cue-establishment-card">
+        <strong class="cue-establishment-heading">
+          <span>CUE ${escapeHtml(cue.cue)}</span>
+          ${renderCopyButton(cue.cue, `CUE ${cue.cue}`)}
+          <span>PREDIO ${escapeHtml(cue.property_number)}</span>
+          ${renderCopyButton(cue.property_number, `predio ${cue.property_number}`)}
+        </strong>
+        <dl>
+          ${fields.map(([label, value]) => `
+            <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+          ${cellphone ? `
+            <div>
+              <dt>Celular</dt>
+              <dd class="search-contact">
+                <span>${escapeHtml(cellphone)}</span>
+                ${renderContactActions(cellphone)}
+              </dd>
+            </div>` : ""}
+        </dl>
+      </article>`;
+  }
+
+  function renderCopyButton(value, label) {
+    const safeLabel = escapeHtml(`Copiar ${label}`);
+    return `
+      <button class="contact-action copy-action" type="button" data-action="copy-value" data-copy-value="${escapeHtml(value)}" data-copy-label="${escapeHtml(label)}" aria-label="${safeLabel}" title="${safeLabel}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>
+      </button>`;
+  }
+
+  function renderContactActions(phone) {
+    const phoneDigits = String(phone ?? "").replace(/\D/g, "");
+    if (!phoneDigits) return "";
+    const safePhone = escapeHtml(phone);
+    const whatsappUrl = `https://wa.me/549${phoneDigits}`;
+
+    return `
+      <a class="contact-action whatsapp-action" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Abrir chat de WhatsApp con ${safePhone}" title="Abrir WhatsApp">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.5 0 .1 5.4.1 12c0 2.1.6 4.2 1.6 6L0 24l6.2-1.6a12 12 0 0 0 5.9 1.5h.1c6.6 0 12-5.4 12-12a11.8 11.8 0 0 0-3.7-8.4Zm-8.4 18.4c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.3-.4A9.8 9.8 0 1 1 12.1 22Zm5.4-7.3c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1a8.3 8.3 0 0 1-2.5-1.5 9.4 9.4 0 0 1-1.7-2.1c-.2-.3 0-.5.1-.6l.5-.6.3-.5c.1-.2 0-.4 0-.6l-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.2 1.4 3.4c.2.2 2.4 3.7 5.8 5.1.8.3 1.4.5 1.9.6.8.2 1.5.2 2 .1.6-.1 1.8-.8 2-1.5.3-.7.3-1.3.2-1.5 0-.2-.3-.3-.6-.5Z"/></svg>
+      </a>
+      ${renderCopyButton(phone, `el celular ${phone}`)}`;
+  }
+
+  function renderPendingProperty(assignment) {
+    const establishments = state.cueEstablishments
+      .filter((cue) => cue.property_number === assignment.property_number)
+      .sort((a, b) => a.cue.localeCompare(b.cue));
+    if (!establishments.length) {
+      return `<li class="property-status">${escapeHtml(assignment.property_number)} · Sin ficha CUE</li>`;
+    }
+
+    return `
+      <li class="pending-property-item">
+        <details>
+          <summary class="property-status">
+            Predio ${escapeHtml(assignment.property_number)} · ${establishments.length} CUE
+          </summary>
+          <div class="cue-establishments-list">${establishments.map(renderCueEstablishment).join("")}</div>
+        </details>
+      </li>`;
+  }
+
   function renderVisits() {
     const results = filteredVisits();
     const container = byId("visit-results");
@@ -785,8 +866,7 @@
       : [];
     byId("pending-properties-count").textContent = String(pendingProperties.length);
     byId("pending-properties-list").innerHTML = pendingProperties.length
-      ? `<ul class="pending-properties-list">${pendingProperties.map((assignment) =>
-        `<li class="property-status">${escapeHtml(assignment.property_number)}</li>`).join("")}</ul>`
+      ? `<ul class="pending-properties-list">${pendingProperties.map(renderPendingProperty).join("")}</ul>`
       : '<div class="empty-state">No tenés predios pendientes de visitar.</div>';
     byId("search-default-hint").hidden = searchUsesAllVisits();
     byId("result-count").textContent = `${results.length} ${results.length === 1 ? "visita" : "visitas"}`;
@@ -798,8 +878,6 @@
 
     container.innerHTML = results.map((visit) => {
       const technicianExperience = isTechnicianExperience();
-      const phone = String(visit.cellphone).replace(/\D/g, "");
-      const whatsappUrl = `https://wa.me/549${phone}`;
       const needsContactUpdate = technicianExperience && (
         String(visit.contact_name ?? "").trim().toUpperCase() === "COMPLETAR"
         || ["3411111111", "1111111111"].includes(String(visit.cellphone ?? "").trim())
@@ -826,12 +904,7 @@
               <span class="search-contact-name">${escapeHtml(visit.contact_name)}</span>
               <div class="search-contact">
                 <span>${escapeHtml(visit.cellphone)}</span>
-                <a class="contact-action whatsapp-action" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Abrir chat de WhatsApp con ${escapeHtml(visit.cellphone)}" title="Abrir WhatsApp">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.5 0 .1 5.4.1 12c0 2.1.6 4.2 1.6 6L0 24l6.2-1.6a12 12 0 0 0 5.9 1.5h.1c6.6 0 12-5.4 12-12a11.8 11.8 0 0 0-3.7-8.4Zm-8.4 18.4c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.3-.4A9.8 9.8 0 1 1 12.1 22Zm5.4-7.3c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1a8.3 8.3 0 0 1-2.5-1.5 9.4 9.4 0 0 1-1.7-2.1c-.2-.3 0-.5.1-.6l.5-.6.3-.5c.1-.2 0-.4 0-.6l-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.2 1.4 3.4c.2.2 2.4 3.7 5.8 5.1.8.3 1.4.5 1.9.6.8.2 1.5.2 2 .1.6-.1 1.8-.8 2-1.5.3-.7.3-1.3.2-1.5 0-.2-.3-.3-.6-.5Z"/></svg>
-                </a>
-                <button class="contact-action copy-action" type="button" data-action="copy-phone" data-phone="${escapeHtml(visit.cellphone)}" aria-label="Copiar celular ${escapeHtml(visit.cellphone)}" title="Copiar celular">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/></svg>
-                </button>
+                ${renderContactActions(visit.cellphone)}
                 ${editIcon}
               </div>
             </div>
@@ -1929,15 +2002,21 @@
     }
   }
 
-  async function copyPhone(phone) {
+  async function copyText(value, label) {
     try {
       if (!navigator.clipboard?.writeText) {
         throw new Error("El navegador no permite copiar al portapapeles desde esta página.");
       }
-      await navigator.clipboard.writeText(phone);
-      showNotice(`Se copió el celular ${phone}.`);
+      await navigator.clipboard.writeText(String(value));
+      showNotice(`Se copió ${label}.`);
     } catch (error) {
-      showNotice(error.message || "No se pudo copiar el celular.", true);
+      showNotice(error.message || `No se pudo copiar ${label}.`, true);
+    }
+  }
+
+  function handleCopyButton(button) {
+    if (button.dataset.action === "copy-value") {
+      copyText(button.dataset.copyValue, button.dataset.copyLabel);
     }
   }
 
@@ -2128,10 +2207,14 @@
     byId("visit-date").addEventListener("focus", setVisitDateLimit);
     byId("property-number").addEventListener("input", hideVisitSuccess);
     byId("cancel-edit").addEventListener("click", resetVisitForm);
+    byId("pending-properties-list").addEventListener("click", (event) => {
+      const button = event.target.closest('button[data-action="copy-value"]');
+      if (button) handleCopyButton(button);
+    });
     byId("visit-results").addEventListener("click", (event) => {
       const actionElement = event.target.closest("[data-action]");
       if (!actionElement) return;
-      if (actionElement.dataset.action === "copy-phone") copyPhone(actionElement.dataset.phone);
+      if (actionElement.dataset.action === "copy-value") handleCopyButton(actionElement);
       else if (actionElement.dataset.action === "edit") beginEdit(actionElement.dataset.id);
       else if (actionElement instanceof HTMLButtonElement) toggleArchive(actionElement);
     });
