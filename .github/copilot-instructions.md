@@ -55,6 +55,8 @@ Actualiza obligatoriamente `README.md` cuando una modificación:
 - altere la estructura de datos;
 - modifique importaciones o exportaciones CSV.
 
+En los mismos casos, actualiza también la sección **Ayuda para técnicos** de `index.html` cuando el cambio afecte los pasos o la información que necesitan los técnicos para usar la aplicación.
+
 ## No crear documentación adicional
 
 No crear:
