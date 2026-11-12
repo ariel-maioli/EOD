@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261111.34";
+  const APP_VERSION = "20261111.35";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -779,13 +779,17 @@
   }
 
   function renderCueEstablishment(cue) {
+    const locality = String(cue.locality ?? "").trim();
+    const postalCode = String(cue.postal_code ?? "").trim();
+    const localityField = locality
+      ? ["Localidad", `${locality}${postalCode ? ` (${postalCode})` : ""}`]
+      : ["CP", postalCode];
     const fields = [
       ["Nombre", cue.property_name],
       ["Domicilio", cue.address],
-      ["Localidad", cue.locality],
-      ["CP", cue.postal_code],
-      ["Contacto", cue.contact_name],
-      ["email", cue.property_email]
+      localityField,
+      ["email", cue.property_email],
+      ["Contacto", cue.contact_name]
     ].filter(([, value]) => String(value ?? "").trim());
     const cellphone = String(cue.contact_cellphone ?? "").trim();
 
