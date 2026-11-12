@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261111.36";
+  const APP_VERSION = "20261112.1";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -778,7 +778,7 @@
       || b.created_at.localeCompare(a.created_at));
   }
 
-  function renderCueEstablishment(cue) {
+  function renderCueEstablishment(cue, showPropertyNumber = true) {
     const locality = String(cue.locality ?? "").trim();
     const postalCode = String(cue.postal_code ?? "").trim();
     const localityField = locality
@@ -788,7 +788,7 @@
       ["Nombre", cue.property_name],
       ["Domicilio", cue.address],
       localityField,
-      ["email", cue.property_email],
+      ["Email", cue.property_email],
       ["Contacto", cue.contact_name]
     ].filter(([, value]) => String(value ?? "").trim());
     const cellphone = String(cue.contact_cellphone ?? "").trim();
@@ -798,8 +798,9 @@
         <strong class="cue-establishment-heading">
           <span>CUE ${escapeHtml(cue.cue)}</span>
           ${renderCopyButton(cue.cue, `CUE ${cue.cue}`)}
-          <span>PREDIO ${escapeHtml(cue.property_number)}</span>
-          ${renderCopyButton(cue.property_number, `predio ${cue.property_number}`)}
+          ${showPropertyNumber ? `
+            <span>PREDIO ${escapeHtml(cue.property_number)}</span>
+            ${renderCopyButton(cue.property_number, `predio ${cue.property_number}`)}` : ""}
         </strong>
         <dl>
           ${fields.map(([label, value]) => `
@@ -851,7 +852,8 @@
           <summary class="property-status">
             Predio ${escapeHtml(assignment.property_number)} · ${establishments.length} CUE
           </summary>
-          <div class="cue-establishments-list">${establishments.map(renderCueEstablishment).join("")}</div>
+          <div class="cue-establishments-list">${establishments
+            .map((cue, index) => renderCueEstablishment(cue, index === 0)).join("")}</div>
         </details>
       </li>`;
   }
