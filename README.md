@@ -143,3 +143,9 @@ El script detecta las cuentas y roles directamente en el proyecto seleccionado. 
 ## Publicar con GitHub Pages
 
 En GitHub, abrí **Settings → Pages**, seleccioná **Deploy from a branch**, elegí la rama `main` y la carpeta `/ (root)`, y guardá. GitHub Pages publica los archivos del repositorio; el acceso a los datos de la aplicación requiere iniciar sesión. Después de cambiar los archivos, publicá los cambios en el repositorio para que aparezcan en el sitio. Al publicar una versión nueva, actualizá el número de versión en `index.html`, `app.js` y `version.json`; así el navegador descarga los archivos actualizados y las sesiones abiertas en la pantalla de ingreso pueden refrescarse automáticamente.
+
+## Instalar en Chrome para Android
+
+Después de publicar los cambios, abrí la URL HTTPS de producción de EOD en Chrome, por ejemplo `https://ariel-maioli.github.io/EOD/`. En el menú de Chrome elegí **Instalar aplicación** o **Agregar a la pantalla principal** y seguí las indicaciones; el texto y la disponibilidad de la instalación pueden variar según el dispositivo y la versión de Chrome. Abrí EOD desde el ícono e ingresá con tu cuenta habitual.
+
+La aplicación instalada utiliza producción y sigue necesitando internet para cargar la aplicación, autenticarse y consultar o guardar datos; no permite trabajar sin conexión. La instalación no cambia los permisos ni las políticas de Supabase. La instalación requiere HTTPS y no funciona desde `file://`; el modo `?env=dev` no ofrece el manifiesto de instalación de producción, para evitar abrir producción al iniciar una instalación de desarrollo.
