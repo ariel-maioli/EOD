@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261112.1";
+  const APP_VERSION = "20261112.2";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -141,20 +141,17 @@
     return local.toISOString().slice(0, 10);
   }
 
-  function currentArgentinaWeek() {
+  function currentArgentinaVisitRange() {
     const [year, month, day] = argentinaDateKey(new Date()).split("-").map(Number);
     const today = new Date(Date.UTC(year, month - 1, day));
-    const daysSinceMonday = (today.getUTCDay() + 6) % 7;
-    const monday = new Date(today);
-    monday.setUTCDate(today.getUTCDate() - daysSinceMonday);
-    const sunday = new Date(monday);
-    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const from = new Date(today);
+    from.setUTCDate(today.getUTCDate() - 14);
     const dateKey = (value) => value.toISOString().slice(0, 10);
-    return { from: dateKey(monday), to: dateKey(sunday) };
+    return { from: dateKey(from), to: dateKey(today) };
   }
 
-  function setAdminVisitWeek() {
-    const { from, to } = currentArgentinaWeek();
+  function setDefaultVisitFilters() {
+    const { from, to } = currentArgentinaVisitRange();
     byId("filter-from").value = from;
     byId("filter-to").value = to;
     byId("filter-user").value = "";
@@ -557,26 +554,15 @@
     return visits;
   }
 
-  function searchUsesAllVisits() {
-    return Boolean(
-      state.searchAllVisits || byId("search-query").value.trim()
-      || byId("filter-from").value
-      || byId("filter-to").value
-      || (canUseAdminFeatures() && byId("filter-user").value)
-      || (canUseAdminFeatures() && byId("filter-status").value !== "active")
-    );
+  function shouldShowSearchHint() {
+    return !state.searchAllVisits
+      && !byId("search-query").value.trim()
+      && (!canUseAdminFeatures()
+        || (!byId("filter-user").value && byId("filter-status").value === "active"));
   }
 
   async function fetchSearchVisits() {
-    if (searchUsesAllVisits()) return fetchAllVisits();
-
-    const userId = isTechnicianPreview() ? state.viewAsTechnicianId : state.user?.id;
-    if (!userId) return fetchAllVisits();
-    const { data, error } = await orderedVisitsQuery()
-      .eq("created_by", userId)
-      .limit(25);
-    if (error) throw error;
-    return data || [];
+    return fetchAllVisits();
   }
 
   function attachVisiblePayments(visits) {
@@ -721,14 +707,7 @@
 
     state.viewAsTechnicianId = technicianId;
     byId("search-query").value = "";
-    if (technicianId) {
-      byId("filter-user").value = "";
-      byId("filter-status").value = "active";
-      byId("filter-from").value = "";
-      byId("filter-to").value = "";
-    } else {
-      setAdminVisitWeek();
-    }
+    setDefaultVisitFilters();
     resetVisitForm();
     configureRoleExperience();
     setView(technicianId ? "form-view" : "search-view");
@@ -871,7 +850,7 @@
     byId("pending-properties-list").innerHTML = pendingProperties.length
       ? `<ul class="pending-properties-list">${pendingProperties.map(renderPendingProperty).join("")}</ul>`
       : '<div class="empty-state">No tenés predios pendientes de visitar.</div>';
-    byId("search-default-hint").hidden = searchUsesAllVisits();
+    byId("search-default-hint").hidden = !shouldShowSearchHint();
     byId("result-count").textContent = `${results.length} ${results.length === 1 ? "visita" : "visitas"}`;
 
     if (!results.length) {
@@ -928,11 +907,8 @@
   function refreshSearchVisits() {
     window.clearTimeout(state.searchTimer);
     const requestId = ++state.searchRequestId;
-    const searchingAll = searchUsesAllVisits();
-    byId("search-default-hint").hidden = searchingAll;
-    byId("result-count").textContent = searchingAll
-      ? "Buscando en todos los registros…"
-      : "Cargando tus últimas visitas…";
+    byId("search-default-hint").hidden = !shouldShowSearchHint();
+    byId("result-count").textContent = "Buscando visitas…";
     byId("visit-results").innerHTML = "";
 
     state.searchTimer = window.setTimeout(async () => {
@@ -1517,8 +1493,7 @@
     byId("application").hidden = false;
     byId("session-area").hidden = false;
     byId("session-email").textContent = profileName(data.id);
-    if (isAdmin()) setAdminVisitWeek();
-    else byId("filter-status").value = "active";
+    setDefaultVisitFilters();
     setVisitDateLimit();
     byId("visit-date").value = localDateInputValue();
     resetVisitForm();

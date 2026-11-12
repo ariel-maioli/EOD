@@ -13,10 +13,10 @@
       document.head.appendChild(manifest);
     }
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261112.1">
+  <link rel="stylesheet" href="styles.css?v=20261112.2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js?v=20261112.1" defer></script>
+  <script src="app.js?v=20261112.2" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -144,8 +144,7 @@
         <div id="pending-properties-card" class="card" hidden>
           <div class="help-topics">
             <details>
-              <summary>Predios pendientes de visitar (<span id="pending-properties-count">0</span>)</summary>
-              <p class="muted">Predios pendientes de mantenimiento:</p>
+              <summary>Pendientes de visita (<span id="pending-properties-count">0</span>)</summary>
               <div id="pending-properties-list" aria-live="polite"></div>
             </details>
           </div>
@@ -187,7 +186,7 @@
               </select>
             </label>
           </div>
-          <p id="search-default-hint" class="muted">Mostramos tus últimas 25 visitas. Completá un campo o limpiá los filtros para ver todos los registros disponibles.</p>
+          <p id="search-default-hint" class="muted">Visitas de los últimos 15 días. Modificá los campos para cambiar los filtros.</p>
           <div id="export-actions" class="export-actions" hidden>
             <button id="export-filtered" class="button button-secondary" type="button">Exportar resultados a CSV</button>
             <button id="export-all" class="button button-quiet" type="button">Exportar todos los activos</button>
@@ -409,7 +408,7 @@
           <li>Escribí el número de predio, el nombre de contacto o el celular. También podés elegir fechas.</li>
           <li>En la fila, usá los botones para abrir WhatsApp o copiar el celular.</li>
         </ol>
-        <p>Al entrar se muestran tus últimas 25 visitas. Tocá <strong>Limpiar filtros</strong> para ver todas las visitas disponibles.</p>
+        <p>Al entrar se muestran las visitas de los últimos 15 días. Modificá los campos para cambiar los filtros o tocá <strong>Limpiar filtros</strong> para ver todas las visitas disponibles.</p>
         <p>En <strong>Predios pendientes de visitar</strong> podés desplegar los predios que tenés asignados y todavía faltan visitar para consultar su ficha CUE, domicilio y datos de contacto disponibles. Desde el celular podés copiar el CUE, el predio o el celular, y abrir WhatsApp. La lista no cambia al aplicar filtros de visitas.</p>
         <p>Una fila marcada con <strong>⚠</strong> tiene un contacto o celular pendiente de completar. Si tenés los datos correctos y la visita es tuya, podés corregirlos.</p>
       </details>
