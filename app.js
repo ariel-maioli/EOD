@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261112.2";
+  const APP_VERSION = "20261112.6";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -19,6 +19,7 @@
     trackingSettings: { visits_per_workday: 2, alert_days: 15 },
     audit: [],
     editingId: null,
+    editingCueId: null,
     viewAsTechnicianId: "",
     maintenanceEnabled: false,
     busy: false,
@@ -554,6 +555,7 @@
     state.trackingSettings = { visits_per_workday: 2, alert_days: 15 };
     state.audit = [];
     state.editingId = null;
+    state.editingCueId = null;
   }
 
   const visitColumns = "id,property_number,visit_date,contact_name,cellphone,notes,created_by,created_at,updated_by,updated_at,archived_at,archived_by";
@@ -664,6 +666,7 @@
     renderPayments();
     renderActivity();
     renderPropertiesPanel();
+    if (canUseAdminFeatures()) renderCueCatalog();
   }
 
   function renderUserFilter() {
@@ -714,6 +717,7 @@
       : isAdmin() ? "Administrador" : "Técnico";
     byId("welcome-title").textContent = `${greetingForCurrentTime()}, ${profileName(experienceProfile?.id || state.user?.id)}`;
     byId("activity-tab").hidden = !adminFeaturesEnabled;
+    byId("cue-admin-tab").hidden = !adminFeaturesEnabled;
     byId("properties-tab").hidden = !adminFeaturesEnabled;
     byId("pending-properties-card").hidden = !isTechnicianExperience();
     byId("export-actions").hidden = !adminFeaturesEnabled;
@@ -851,7 +855,7 @@
 
   function renderPendingProperty(assignment) {
     const establishments = state.cueEstablishments
-      .filter((cue) => cue.property_number === assignment.property_number)
+      .filter((cue) => !cue.archived_at && cue.property_number === assignment.property_number)
       .sort((a, b) => a.cue.localeCompare(b.cue));
     if (!establishments.length) {
       return `<li class="property-status">${escapeHtml(assignment.property_number)} · Sin ficha CUE</li>`;
@@ -1300,6 +1304,164 @@
         `;
       }).join("")
       : '<div class="empty-state">No hay predios para este filtro.</div>';
+
+  }
+
+  const cueEditableFields = [
+    "cue",
+    "zone",
+    "department",
+    "locality",
+    "nro",
+    "property_type",
+    "property_name",
+    "address",
+    "postal_code",
+    "property_email",
+    "contact_name",
+    "contact_cellphone"
+  ];
+
+  function renderCueCatalog() {
+    const filter = byId("cue-status-filter").value;
+    const query = normalize(byId("cue-search").value.trim());
+    const establishments = state.cueEstablishments
+      .filter((establishment) => {
+        const archived = Boolean(establishment.archived_at);
+        if (filter === "active" && archived) return false;
+        if (filter === "archived" && !archived) return false;
+        if (!query) return true;
+        return normalize(cueEditableFields.map((field) => establishment[field] || "").join(" "))
+          .includes(query);
+      })
+      .sort((left, right) => left.cue.localeCompare(right.cue));
+
+    const visibleEstablishments = establishments.slice(0, 100);
+    byId("cue-catalog-count").textContent =
+      `Mostrando ${visibleEstablishments.length} de ${establishments.length} fichas`;
+    byId("cue-catalog-list").innerHTML = visibleEstablishments.length
+      ? visibleEstablishments.map((establishment) => {
+        const archived = Boolean(establishment.archived_at);
+        const description = [
+          establishment.property_name,
+          establishment.locality,
+          establishment.property_number ? `Predio ${establishment.property_number}` : ""
+        ].filter(Boolean).map(escapeHtml).join(" · ");
+        return `
+          <article class="cue-catalog-row${archived ? " cue-catalog-row-archived" : ""}">
+            <div class="cue-catalog-details">
+              <strong>CUE ${escapeHtml(establishment.cue)}</strong>
+              <span>${description || "Sin nombre ni localidad"}</span>
+              ${archived ? '<span class="property-status status-archivado">Inactivo</span>' : ""}
+            </div>
+            <div class="cue-catalog-actions">
+              <button class="button button-small button-secondary" type="button" data-action="edit-cue" data-cue="${escapeHtml(establishment.cue)}">Editar</button>
+              <button class="button button-small button-quiet" type="button" data-action="toggle-cue" data-cue="${escapeHtml(establishment.cue)}" data-archived="${archived}">${archived ? "Restaurar" : "Dar de baja"}</button>
+            </div>
+          </article>`;
+      }).join("")
+      : '<div class="empty-state">No hay fichas CUE para este filtro.</div>';
+  }
+
+  function resetCueEstablishmentForm() {
+    byId("cue-establishment-form").reset();
+    byId("cue-cue").disabled = false;
+    byId("cue-establishment-form-title").textContent = "Agregar ficha CUE";
+    byId("save-cue-establishment").textContent = "Agregar ficha";
+    byId("cancel-cue-edit").hidden = true;
+    state.editingCueId = null;
+  }
+
+  function beginCueEdit(cue) {
+    if (!canUseAdminFeatures()) return;
+    const establishment = state.cueEstablishments.find((item) => item.cue === cue);
+    if (!establishment) {
+      showNotice("No se encontró la ficha CUE seleccionada.", true);
+      return;
+    }
+
+    state.editingCueId = establishment.cue;
+    cueEditableFields.forEach((field) => {
+      byId(`cue-${field}`).value = establishment[field] ?? "";
+    });
+    byId("cue-establishment-form-title").textContent = `Editar ficha CUE ${establishment.cue}`;
+    byId("save-cue-establishment").textContent = "Guardar cambios";
+    byId("cancel-cue-edit").hidden = false;
+    byId("cue-cue").focus();
+    byId("cue-establishment-form").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function saveCueEstablishment(event) {
+    event.preventDefault();
+    if (!canUseAdminFeatures() || state.busy) return;
+
+    const formData = new FormData(byId("cue-establishment-form"));
+    const payload = Object.fromEntries(cueEditableFields.map((field) => {
+      const value = String(formData.get(field) ?? "").trim();
+      return [field, field === "cue" ? value : value || null];
+    }));
+    if (!/^[0-9]{9}$/.test(payload.cue)) {
+      showNotice("El CUE debe tener exactamente 9 dígitos.", true);
+      return;
+    }
+
+    const editingCue = state.editingCueId;
+    const successMessage = editingCue ? "La ficha CUE se actualizó." : "La ficha CUE se agregó.";
+    setBusy(true);
+    clearNotice();
+    try {
+      const query = editingCue
+        ? state.client.from("cue_establishments").update(payload).eq("cue", editingCue)
+        : state.client.from("cue_establishments").insert(payload);
+      const { data, error } = await query.select("cue").single();
+      if (error) throw error;
+      if (!data) throw new Error("Supabase no confirmó el guardado de la ficha CUE.");
+
+      resetCueEstablishmentForm();
+      try {
+        await loadData();
+        showNotice(successMessage);
+      } catch (error) {
+        showNotice(`${successMessage} No se pudo actualizar el listado. ${humanError(error)}`, true);
+      }
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleCueArchive(button) {
+    if (!canUseAdminFeatures() || state.busy) return;
+    const cue = button.dataset.cue;
+    const archived = button.dataset.archived === "true";
+    const confirmation = archived
+      ? `¿Restaurar la ficha CUE ${cue}?`
+      : `¿Dar de baja la ficha CUE ${cue}? La ficha se conservará y podrá restaurarse.`;
+    if (!window.confirm(confirmation)) return;
+
+    const successMessage = archived ? "La ficha CUE se restauró." : "La ficha CUE se dio de baja.";
+    setBusy(true);
+    clearNotice();
+    try {
+      const { data, error } = await state.client.from("cue_establishments")
+        .update({ archived_at: archived ? null : new Date().toISOString() })
+        .eq("cue", cue)
+        .select("cue")
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error("Supabase no confirmó el cambio de estado de la ficha CUE.");
+      try {
+        await loadData();
+        showNotice(successMessage);
+      } catch (error) {
+        showNotice(`${successMessage} No se pudo actualizar el listado. ${humanError(error)}`, true);
+      }
+    } catch (error) {
+      showNotice(humanError(error), true);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function importVisits(event) {
@@ -1637,6 +1799,12 @@
       .filter(Boolean)
       .join(" ");
     const normalizedMessage = message.toLocaleLowerCase("en");
+    if (message.includes("cue_establishments_pkey")) {
+      return "Ya existe una ficha con ese CUE.";
+    }
+    if (message.includes("cue_establishments_cue_check")) {
+      return "El CUE debe tener exactamente 9 dígitos.";
+    }
     if (message.includes("visits_property_number_visit_date_key")) {
       return "Ya existe una visita para ese predio en esa fecha. Buscala y editá el registro existente.";
     }
@@ -2165,6 +2333,16 @@
     byId("visit-import-template").addEventListener("click", downloadVisitImportTemplate);
     byId("property-status-filter").addEventListener("change", renderPropertiesPanel);
     byId("property-technician-filter").addEventListener("change", renderPropertiesPanel);
+    byId("cue-establishment-form").addEventListener("submit", saveCueEstablishment);
+    byId("cancel-cue-edit").addEventListener("click", resetCueEstablishmentForm);
+    byId("cue-search").addEventListener("input", renderCueCatalog);
+    byId("cue-status-filter").addEventListener("change", renderCueCatalog);
+    byId("cue-catalog-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      if (button.dataset.action === "edit-cue") beginCueEdit(button.dataset.cue);
+      else if (button.dataset.action === "toggle-cue") await toggleCueArchive(button);
+    });
     byId("sign-out").addEventListener("click", async () => {
       setBusy(true);
       try {

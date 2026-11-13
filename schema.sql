@@ -120,8 +120,15 @@ create table if not exists public.cue_establishments (
     postal_code text,
     property_email text,
     contact_name text,
-    contact_cellphone text
+    contact_cellphone text,
+    archived_at timestamptz,
+    archived_by uuid
 );
+
+alter table public.cue_establishments
+    add column if not exists archived_at timestamptz;
+alter table public.cue_establishments
+    add column if not exists archived_by uuid;
 
 create table if not exists public.visits (
     id uuid primary key default gen_random_uuid(),
@@ -326,6 +333,27 @@ begin
 end;
 $$;
 
+create or replace function public.set_cue_establishment_archive_metadata()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    if new.archived_at is distinct from old.archived_at then
+        if not public.is_admin() then
+            raise exception 'Only an admin can archive or restore CUE establishments';
+        end if;
+        if new.archived_at is null then
+            new.archived_by := null;
+        else
+            new.archived_by := auth.uid();
+        end if;
+    end if;
+    return new;
+end;
+$$;
+
 create or replace function public.write_audit_log()
 returns trigger
 language plpgsql
@@ -413,6 +441,12 @@ drop trigger if exists properties_set_metadata on public.properties;
 create trigger properties_set_metadata
 before insert or update on public.properties
 for each row execute function public.set_record_metadata();
+
+drop trigger if exists cue_establishments_set_archive_metadata
+    on public.cue_establishments;
+create trigger cue_establishments_set_archive_metadata
+before update of archived_at on public.cue_establishments
+for each row execute function public.set_cue_establishment_archive_metadata();
 
 drop trigger if exists visits_set_metadata on public.visits;
 create trigger visits_set_metadata
@@ -1511,7 +1545,8 @@ using (
     and (
         public.is_admin()
         or (
-            property_number is not null
+            cue_establishments.archived_at is null
+            and cue_establishments.property_number is not null
             and exists (
                 select 1
                 from public.properties as property
@@ -1525,6 +1560,19 @@ using (
         )
     )
 );
+
+drop policy if exists "cue_establishments_insert_admin"
+    on public.cue_establishments;
+create policy "cue_establishments_insert_admin"
+on public.cue_establishments for insert to authenticated
+with check (public.application_access_allowed() and public.is_admin());
+
+drop policy if exists "cue_establishments_update_admin"
+    on public.cue_establishments;
+create policy "cue_establishments_update_admin"
+on public.cue_establishments for update to authenticated
+using (public.application_access_allowed() and public.is_admin())
+with check (public.application_access_allowed() and public.is_admin());
 
 drop policy if exists "visits_select_active_or_admin" on public.visits;
 create policy "visits_select_active_or_admin"
@@ -1593,6 +1641,35 @@ grant select on public.profiles, public.properties, public.cue_establishments,
     public.audit_log,
     public.property_assignments, public.property_tracking_settings
     to authenticated;
+grant insert (
+    cue,
+    zone,
+    department,
+    locality,
+    nro,
+    property_type,
+    property_name,
+    address,
+    postal_code,
+    property_email,
+    contact_name,
+    contact_cellphone
+) on public.cue_establishments to authenticated;
+grant update (
+    cue,
+    zone,
+    department,
+    locality,
+    nro,
+    property_type,
+    property_name,
+    address,
+    postal_code,
+    property_email,
+    contact_name,
+    contact_cellphone,
+    archived_at
+) on public.cue_establishments to authenticated;
 revoke select (paid_at, paid_by) on public.visits
     from public, anon, authenticated;
 grant select (

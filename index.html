@@ -93,8 +93,9 @@
       <nav class="tabs" aria-label="Secciones">
         <button class="tab-button" type="button" data-view="form-view">Nueva visita</button>
         <button class="tab-button" type="button" data-view="search-view">Buscar visitas</button>
-        <button class="tab-button" type="button" data-view="payments-view">Pagos</button>
         <button id="properties-tab" class="tab-button" type="button" data-view="properties-view" hidden>Predios</button>
+        <button class="tab-button" type="button" data-view="payments-view">Pagos</button>
+        <button id="cue-admin-tab" class="tab-button" type="button" data-view="cue-admin-view" hidden>CUE Admin</button>
         <button id="activity-tab" class="tab-button" type="button" data-view="activity-view" hidden>Actividad reciente</button>
       </nav>
 
@@ -215,6 +216,86 @@
             </span>
           </div>
           <div id="activity-list" class="activity-list"></div>
+        </div>
+      </section>
+
+      <section id="cue-admin-view" class="view-panel" hidden>
+        <div class="card">
+          <div class="eyebrow">Administración</div>
+          <h2>Catálogo CUE</h2>
+          <p class="muted">Podés crear y editar fichas, incluido su CUE. Las bajas son lógicas: conservan los datos y se pueden restaurar. El vínculo al predio no se modifica desde este formulario.</p>
+          <form id="cue-establishment-form" class="form-grid cue-establishment-form">
+            <h3 id="cue-establishment-form-title" class="field-full">Agregar ficha CUE</h3>
+            <label class="field" for="cue-cue">
+              <span>CUE <span class="required">*</span></span>
+              <input id="cue-cue" name="cue" type="text" inputmode="numeric" pattern="[0-9]{9}" maxlength="9" required>
+              <small>Exactamente 9 dígitos. Debe ser único.</small>
+            </label>
+            <label class="field" for="cue-zone">
+              <span>Zona</span>
+              <input id="cue-zone" name="zone" type="text">
+            </label>
+            <label class="field" for="cue-department">
+              <span>Departamento</span>
+              <input id="cue-department" name="department" type="text">
+            </label>
+            <label class="field" for="cue-locality">
+              <span>Localidad</span>
+              <input id="cue-locality" name="locality" type="text">
+            </label>
+            <label class="field" for="cue-nro">
+              <span>Nro</span>
+              <input id="cue-nro" name="nro" type="text">
+            </label>
+            <label class="field" for="cue-property_type">
+              <span>Tipo de establecimiento</span>
+              <input id="cue-property_type" name="property_type" type="text">
+            </label>
+            <label class="field" for="cue-property_name">
+              <span>Nombre</span>
+              <input id="cue-property_name" name="property_name" type="text">
+            </label>
+            <label class="field" for="cue-address">
+              <span>Domicilio</span>
+              <input id="cue-address" name="address" type="text">
+            </label>
+            <label class="field" for="cue-postal_code">
+              <span>Código postal</span>
+              <input id="cue-postal_code" name="postal_code" type="text">
+            </label>
+            <label class="field" for="cue-property_email">
+              <span>Email</span>
+              <input id="cue-property_email" name="property_email" type="text">
+            </label>
+            <label class="field" for="cue-contact_name">
+              <span>Nombre de contacto</span>
+              <input id="cue-contact_name" name="contact_name" type="text">
+            </label>
+            <label class="field" for="cue-contact_cellphone">
+              <span>Celular de contacto</span>
+              <input id="cue-contact_cellphone" name="contact_cellphone" type="text">
+            </label>
+            <div class="form-actions field-full">
+              <button id="save-cue-establishment" class="button button-primary" type="submit">Agregar ficha</button>
+              <button id="cancel-cue-edit" class="button button-secondary" type="button" hidden>Cancelar edición</button>
+            </div>
+          </form>
+          <div class="cue-catalog-tools">
+            <label class="field" for="cue-search">
+              <span>Buscar fichas CUE</span>
+              <input id="cue-search" type="search" placeholder="CUE, nombre, localidad o contacto">
+            </label>
+            <label class="field" for="cue-status-filter">
+              <span>Estado</span>
+              <select id="cue-status-filter">
+                <option value="active">Activas</option>
+                <option value="archived">De baja</option>
+                <option value="all">Todas</option>
+              </select>
+            </label>
+          </div>
+          <p id="cue-catalog-count" class="muted" aria-live="polite"></p>
+          <div id="cue-catalog-list" class="cue-catalog-list" aria-live="polite"></div>
         </div>
       </section>
 
