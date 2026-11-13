@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261112.13";
+  const APP_VERSION = "20261112.14";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -1308,6 +1308,7 @@
   }
 
   const cueSelectFields = ["zone", "department", "locality", "property_type"];
+  const cueDefaultLocationFields = ["department", "locality"];
   const cueEditableFields = [
     "cue",
     "property_number",
@@ -1332,6 +1333,11 @@
         .map((establishment) => String(establishment[field] ?? "").trim())
         .filter(Boolean))]
         .sort((left, right) => left.localeCompare(right, "es"));
+      if (cueDefaultLocationFields.includes(field) &&
+          !values.some((value) => value.toLocaleLowerCase("es") === "rosario")) {
+        values.push("Rosario");
+        values.sort((left, right) => left.localeCompare(right, "es"));
+      }
       select.innerHTML = [
         '<option value="">Sin especificar</option>',
         ...values.map((value) =>
@@ -1380,8 +1386,18 @@
       : '<div class="empty-state">No hay fichas CUE para este filtro.</div>';
   }
 
+  function setCueDefaultLocation() {
+    cueDefaultLocationFields.forEach((field) => {
+      const select = byId(`cue-${field}`);
+      const rosarioOption = [...select.options].find((option) =>
+        option.value.trim().toLocaleLowerCase("es") === "rosario");
+      if (rosarioOption) select.value = rosarioOption.value;
+    });
+  }
+
   function resetCueEstablishmentForm() {
     byId("cue-establishment-form").reset();
+    setCueDefaultLocation();
     byId("cue-cue").disabled = false;
     byId("cue-cue").readOnly = false;
     byId("cue-establishment-form-title").textContent = "Agregar ficha CUE";
@@ -1809,6 +1825,7 @@
     resetVisitForm();
     setView(isAdmin() ? "search-view" : "form-view");
     await loadData();
+    if (canUseAdminFeatures()) setCueDefaultLocation();
     if (!isAdmin()) focusPropertyNumber();
     return true;
   }
