@@ -223,25 +223,36 @@
         <div class="card">
           <div class="eyebrow">Administración</div>
           <h2>Catálogo CUE</h2>
-          <p class="muted">Podés crear y editar fichas, incluido su CUE. Las bajas son lógicas: conservan los datos y se pueden restaurar. El vínculo al predio no se modifica desde este formulario.</p>
+          <p class="muted">Podés crear y editar fichas, incluido su CUE, y vincular cada CUE a un predio existente del inventario. Podés cambiar o quitar el vínculo; un predio puede tener varios CUE. Las bajas son lógicas: conservan los datos y se pueden restaurar.</p>
           <form id="cue-establishment-form" class="form-grid cue-establishment-form">
             <h3 id="cue-establishment-form-title" class="field-full">Agregar ficha CUE</h3>
             <label class="field" for="cue-cue">
               <span>CUE <span class="required">*</span></span>
               <input id="cue-cue" name="cue" type="text" inputmode="numeric" pattern="[0-9]{9}" maxlength="9" required>
-              <small>Exactamente 9 dígitos. Debe ser único.</small>
+              <small>Exactamente 9 dígitos y único; no se puede cambiar al editar.</small>
+            </label>
+            <label class="field" for="cue-property_number">
+              <span>Número de predio</span>
+              <input id="cue-property_number" name="property_number" type="text" inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6" placeholder="Ej.: 123456">
+              <small>Si no existe, te ofreceremos agregarlo al inventario. Dejalo vacío para quitar el vínculo.</small>
             </label>
             <label class="field" for="cue-zone">
               <span>Zona</span>
-              <input id="cue-zone" name="zone" type="text">
+              <select id="cue-zone" name="zone">
+                <option value="">Sin especificar</option>
+              </select>
             </label>
             <label class="field" for="cue-department">
               <span>Departamento</span>
-              <input id="cue-department" name="department" type="text">
+              <select id="cue-department" name="department">
+                <option value="">Sin especificar</option>
+              </select>
             </label>
             <label class="field" for="cue-locality">
               <span>Localidad</span>
-              <input id="cue-locality" name="locality" type="text">
+              <select id="cue-locality" name="locality">
+                <option value="">Sin especificar</option>
+              </select>
             </label>
             <label class="field" for="cue-nro">
               <span>Nro</span>
@@ -249,7 +260,9 @@
             </label>
             <label class="field" for="cue-property_type">
               <span>Tipo de establecimiento</span>
-              <input id="cue-property_type" name="property_type" type="text">
+              <select id="cue-property_type" name="property_type">
+                <option value="">Sin especificar</option>
+              </select>
             </label>
             <label class="field" for="cue-property_name">
               <span>Nombre</span>
@@ -261,11 +274,12 @@
             </label>
             <label class="field" for="cue-postal_code">
               <span>Código postal</span>
-              <input id="cue-postal_code" name="postal_code" type="text">
+              <input id="cue-postal_code" name="postal_code" type="text" pattern="[Ss]?[0-9]{4}" maxlength="5" placeholder="S2000 o 2000">
+              <small>4 dígitos, con prefijo S opcional.</small>
             </label>
             <label class="field" for="cue-property_email">
               <span>Email</span>
-              <input id="cue-property_email" name="property_email" type="text">
+              <input id="cue-property_email" name="property_email" type="email" autocomplete="email">
             </label>
             <label class="field" for="cue-contact_name">
               <span>Nombre de contacto</span>
@@ -273,7 +287,8 @@
             </label>
             <label class="field" for="cue-contact_cellphone">
               <span>Celular de contacto</span>
-              <input id="cue-contact_cellphone" name="contact_cellphone" type="text">
+              <input id="cue-contact_cellphone" name="contact_cellphone" type="tel" inputmode="numeric" pattern="[1-9][0-9]{9}" maxlength="10" placeholder="3413166322">
+              <small>10 dígitos con código de área, sin 0 ni 15, igual que en Registrar una visita.</small>
             </label>
             <div class="form-actions field-full">
               <button id="save-cue-establishment" class="button button-primary" type="submit">Agregar ficha</button>

@@ -143,7 +143,7 @@ h2 { margin-bottom: 8px; font-size: 1.3rem; }
 .contact-action svg { width: 16px; height: 16px; fill: currentColor; }
 .whatsapp-action { border-color: #b7dfc2; background: #eaf7ee; color: #16803c; }
 .contact-action:focus-visible { outline: 3px solid rgb(14 100 117 / 20%); outline-offset: 2px; }
-.field input:disabled { background: #edf2f4; color: var(--muted); }
+.field input:disabled, .field input:read-only { background: #edf2f4; color: var(--muted); }
 .field small { font-size: .78rem; font-weight: 400; }
 .field-full { grid-column: 1 / -1; }
 .required { color: var(--danger); }

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "20261112.6";
+  const APP_VERSION = "20261112.13";
   const RECOVERY_SESSION_KEY = "eod-password-recovery-user";
   let config = window.EOD_CONFIG;
   const byId = (id) => document.getElementById(id);
@@ -1307,8 +1307,10 @@
 
   }
 
+  const cueSelectFields = ["zone", "department", "locality", "property_type"];
   const cueEditableFields = [
     "cue",
+    "property_number",
     "zone",
     "department",
     "locality",
@@ -1323,6 +1325,21 @@
   ];
 
   function renderCueCatalog() {
+    cueSelectFields.forEach((field) => {
+      const select = byId(`cue-${field}`);
+      const selectedValue = select.value;
+      const values = [...new Set(state.cueEstablishments
+        .map((establishment) => String(establishment[field] ?? "").trim())
+        .filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, "es"));
+      select.innerHTML = [
+        '<option value="">Sin especificar</option>',
+        ...values.map((value) =>
+          `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+      ].join("");
+      if (values.includes(selectedValue)) select.value = selectedValue;
+    });
+
     const filter = byId("cue-status-filter").value;
     const query = normalize(byId("cue-search").value.trim());
     const establishments = state.cueEstablishments
@@ -1366,6 +1383,7 @@
   function resetCueEstablishmentForm() {
     byId("cue-establishment-form").reset();
     byId("cue-cue").disabled = false;
+    byId("cue-cue").readOnly = false;
     byId("cue-establishment-form-title").textContent = "Agregar ficha CUE";
     byId("save-cue-establishment").textContent = "Agregar ficha";
     byId("cancel-cue-edit").hidden = true;
@@ -1382,8 +1400,10 @@
 
     state.editingCueId = establishment.cue;
     cueEditableFields.forEach((field) => {
-      byId(`cue-${field}`).value = establishment[field] ?? "";
+      const value = establishment[field] ?? "";
+      byId(`cue-${field}`).value = cueSelectFields.includes(field) ? String(value).trim() : value;
     });
+    byId("cue-cue").readOnly = true;
     byId("cue-establishment-form-title").textContent = `Editar ficha CUE ${establishment.cue}`;
     byId("save-cue-establishment").textContent = "Guardar cambios";
     byId("cancel-cue-edit").hidden = false;
@@ -1391,41 +1411,137 @@
     byId("cue-establishment-form").scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  async function addPropertyForCue(propertyNumber) {
+    const { data, error } = await state.client.rpc("add_properties", {
+      p_property_numbers: [String(propertyNumber)]
+    });
+    if (error) throw error;
+
+    const wasAdded = data?.added?.some((item) => Number(item) === propertyNumber);
+    const alreadyExists = data?.existing?.some((item) => Number(item) === propertyNumber);
+    const operationError = data?.errors?.find((item) => String(item.property) === String(propertyNumber));
+    if (operationError) {
+      throw new Error(`No se pudo agregar el predio al inventario: ${operationError.message}`);
+    }
+    if (!wasAdded && !alreadyExists) {
+      throw new Error(`No se confirmó el alta del predio ${propertyNumber} en el inventario.`);
+    }
+    return wasAdded;
+  }
+
   async function saveCueEstablishment(event) {
     event.preventDefault();
     if (!canUseAdminFeatures() || state.busy) return;
 
     const formData = new FormData(byId("cue-establishment-form"));
-    const payload = Object.fromEntries(cueEditableFields.map((field) => {
-      const value = String(formData.get(field) ?? "").trim();
-      return [field, field === "cue" ? value : value || null];
-    }));
-    if (!/^[0-9]{9}$/.test(payload.cue)) {
+    const cue = String(formData.get("cue") ?? "").trim();
+    const propertyNumberInput = String(formData.get("property_number") ?? "").trim();
+    const postalCode = String(formData.get("postal_code") ?? "").trim().toUpperCase();
+    const propertyEmail = String(formData.get("property_email") ?? "").trim();
+    const contactCellphone = String(formData.get("contact_cellphone") ?? "").trim();
+    if (!/^[0-9]{9}$/.test(cue)) {
       showNotice("El CUE debe tener exactamente 9 dígitos.", true);
       return;
     }
-
+    if (state.cueEstablishments.some((establishment) =>
+      establishment.cue === cue && establishment.cue !== state.editingCueId)) {
+      showNotice("Ya existe una ficha con ese CUE.", true);
+      return;
+    }
+    if (propertyNumberInput && !/^[1-9][0-9]{5}$/.test(propertyNumberInput)) {
+      showNotice("El número de predio debe tener 6 dígitos y no empezar con cero.", true);
+      return;
+    }
+    if (postalCode && !/^(?:S[0-9]{4}|[0-9]{4})$/.test(postalCode)) {
+      showNotice("El código postal debe tener el formato S9999 o 9999.", true);
+      return;
+    }
+    if (propertyEmail && !byId("cue-property_email").validity.valid) {
+      showNotice("Ingresá un email válido.", true);
+      return;
+    }
+    if (contactCellphone && !/^[1-9][0-9]{9}$/.test(contactCellphone)) {
+      showNotice("El celular debe tener exactamente 10 dígitos, comenzar con un número del 1 al 9 y no incluir 0 ni 15.", true);
+      return;
+    }
+    const propertyNumber = propertyNumberInput ? Number(propertyNumberInput) : null;
     const editingCue = state.editingCueId;
-    const successMessage = editingCue ? "La ficha CUE se actualizó." : "La ficha CUE se agregó.";
+    const payload = Object.fromEntries(cueEditableFields.map((field) => {
+      const value = String(formData.get(field) ?? "").trim();
+      if (field === "cue") return [field, value];
+      if (field === "property_number") return [field, propertyNumber];
+      if (field === "postal_code") return [field, postalCode || null];
+      if (field === "property_email") return [field, propertyEmail || null];
+      if (field === "contact_cellphone") return [field, contactCellphone || null];
+      return [field, value || null];
+    }));
+
+    const currentEstablishment = state.cueEstablishments.find((establishment) =>
+      establishment.cue === editingCue);
+    const isNewPropertyLink = propertyNumber !== null
+      && String(currentEstablishment?.property_number ?? "") !== String(propertyNumber);
+    const alreadyLinkedCues = isNewPropertyLink
+      ? state.cueEstablishments.filter((establishment) =>
+        establishment.cue !== editingCue && establishment.property_number === propertyNumber)
+      : [];
+    if (alreadyLinkedCues.length) {
+      const details = alreadyLinkedCues.map((establishment) => {
+        const name = String(establishment.property_name ?? "").replace(/\s+/g, " ").trim() || "Sin nombre";
+        const address = String(establishment.address ?? "").replace(/\s+/g, " ").trim() || "Sin dirección";
+        const status = establishment.archived_at ? " · De baja" : "";
+        return `CUE ${establishment.cue} · Nombre: ${name} · Dirección: ${address}${status}`;
+      }).join("\n");
+      if (!window.confirm(
+        `El predio ${propertyNumber} ya está vinculado a otro(s) CUE:\n\n${details}\n\n` +
+        `¿Querés continuar y vincularlo también al CUE ${cue}?`
+      )) return;
+    }
+
+    const propertyExists = propertyNumber === null
+      || state.properties.some((property) => property.property_number === propertyNumber);
+    if (propertyNumber !== null && !propertyExists
+        && !window.confirm(
+          `El predio ${propertyNumber} no está en el inventario. ¿Querés agregarlo ahora y vincularlo al CUE ${cue}?`
+        )) return;
+
+    const successMessage = editingCue
+      ? `La ficha CUE ${cue} se actualizó.`
+      : `La ficha CUE ${cue} se agregó.`;
+    let propertyAdded = false;
     setBusy(true);
     clearNotice();
     try {
+      if (propertyNumber !== null && !propertyExists) {
+        propertyAdded = await addPropertyForCue(propertyNumber);
+      }
+
       const query = editingCue
-        ? state.client.from("cue_establishments").update(payload).eq("cue", editingCue)
+        ? state.client.from("cue_establishments")
+          .update(Object.fromEntries(Object.entries(payload).filter(([field]) => field !== "cue")))
+          .eq("cue", editingCue)
         : state.client.from("cue_establishments").insert(payload);
       const { data, error } = await query.select("cue").single();
       if (error) throw error;
       if (!data) throw new Error("Supabase no confirmó el guardado de la ficha CUE.");
 
       resetCueEstablishmentForm();
+      const completionMessage = propertyAdded
+        ? `Se agregó el predio ${propertyNumber} al inventario y se vinculó al CUE ${cue}.`
+        : successMessage;
       try {
         await loadData();
-        showNotice(successMessage);
+        showNotice(completionMessage);
       } catch (error) {
-        showNotice(`${successMessage} No se pudo actualizar el listado. ${humanError(error)}`, true);
+        showNotice(`${completionMessage} No se pudo actualizar el listado. ${humanError(error)}`, true);
       }
     } catch (error) {
-      showNotice(humanError(error), true);
+      const message = humanError(error);
+      showNotice(
+        propertyAdded
+          ? `El predio ${propertyNumber} se agregó al inventario, pero no se pudo guardar el CUE. ${message}`
+          : message,
+        true
+      );
     } finally {
       setBusy(false);
     }

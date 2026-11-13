@@ -1643,6 +1643,7 @@ grant select on public.profiles, public.properties, public.cue_establishments,
     to authenticated;
 grant insert (
     cue,
+    property_number,
     zone,
     department,
     locality,
@@ -1655,8 +1656,10 @@ grant insert (
     contact_name,
     contact_cellphone
 ) on public.cue_establishments to authenticated;
+revoke update (cue) on public.cue_establishments
+    from public, anon, authenticated;
 grant update (
-    cue,
+    property_number,
     zone,
     department,
     locality,
